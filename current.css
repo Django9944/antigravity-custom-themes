@@ -201,3 +201,15 @@ html[data-ag-custom-theme][data-aux-pane-maximized="true"] .agy-sheet > div.rela
 #antigravity-theme-btn[data-theme-mode="dark"][aria-expanded="true"] {
   background: rgba(255, 255, 255, 0.10) !important;
 }
+
+/* 修复新版 Antigravity 顶栏最右侧 Toggle Side Panel 容器残留的原生 --shell-canvas / --shell 灰底补丁
+   （作用域锁定 html[data-ag-custom-theme]，官方原版零侵入，且不影响内置浏览器 --shell-canvas 边框） */
+html[data-ag-custom-theme] div:has(> [data-testid="right-cluster-fade"]),
+html[data-ag-custom-theme] div:has(> [data-testid="toggle-aux-sidebar"]) {
+  background-color: transparent !important;
+  background-image: none !important;
+}
+html[data-ag-custom-theme] [data-testid="right-cluster-fade"] {
+  background-image: none !important;
+  opacity: 0 !important;
+}
