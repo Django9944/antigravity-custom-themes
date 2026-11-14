@@ -298,9 +298,11 @@
             if (theme.id === 'stock') {
                 document.documentElement.style.removeProperty('--antigravity-active-theme-id');
                 document.documentElement.removeAttribute('data-ag-custom-theme');
+                document.documentElement.removeAttribute('data-ag-theme-id');
             } else {
                 document.documentElement.style.setProperty('--antigravity-active-theme-id', theme.id);
                 document.documentElement.setAttribute('data-ag-custom-theme', 'true');
+                document.documentElement.setAttribute('data-ag-theme-id', theme.id);
             }
         } catch (e) {}
 

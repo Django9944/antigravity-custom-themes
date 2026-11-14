@@ -214,23 +214,37 @@ html[data-ag-custom-theme] [data-testid="right-cluster-fade"] {
   opacity: 0 !important;
 }
 
-/* 风格 1：高辨识暖金系行内代码胶囊（仅在启用自定义主题 html[data-ag-custom-theme] 时生效，官方原版零侵入） */
+/* 风格 1：高辨识行内代码胶囊 + P2 主题色彩人格适配（仅在启用自定义主题 html[data-ag-custom-theme] 时生效，官方原版零侵入） */
+html[data-ag-custom-theme] {
+  --ag-inline-code-bg: rgba(217, 119, 6, 0.10);
+  --ag-inline-code-fg: #B45309;
+  --ag-inline-code-border: rgba(180, 83, 9, 0.22);
+}
+html[data-ag-custom-theme]:is(.dark, :has(> body.dark), .theme-dark, .dark-theme) {
+  --ag-inline-code-bg: rgba(245, 158, 11, 0.11);
+  --ag-inline-code-fg: #F6C177;
+  --ag-inline-code-border: rgba(246, 193, 119, 0.24);
+}
+/* 暖橙 / 绯红暖色系主题切换为高辨识冷青绿胶囊，避免“暖字撞暖底” */
+html[data-ag-custom-theme]:is([data-ag-theme-id="orange"], [data-ag-theme-id="red"]) {
+  --ag-inline-code-bg: rgba(13, 148, 136, 0.10);
+  --ag-inline-code-fg: #0F766E;
+  --ag-inline-code-border: rgba(13, 148, 136, 0.24);
+}
+html[data-ag-custom-theme]:is([data-ag-theme-id="orange"], [data-ag-theme-id="red"]):is(.dark, :has(> body.dark), .theme-dark, .dark-theme) {
+  --ag-inline-code-bg: rgba(45, 212, 191, 0.11);
+  --ag-inline-code-fg: #5EEAD4;
+  --ag-inline-code-border: rgba(94, 234, 212, 0.26);
+}
+
 html[data-ag-custom-theme] code:not(pre *):not(.xterm *):not(.monaco-editor *):not([data-testid="media-modal"] *):not(.settings-modal-container *) {
-  background-color: rgba(217, 119, 6, 0.10) !important;
-  color: #B45309 !important;
-  border: 1px solid rgba(180, 83, 9, 0.22) !important;
+  background-color: var(--ag-inline-code-bg) !important;
+  color: var(--ag-inline-code-fg) !important;
+  border: 1px solid var(--ag-inline-code-border) !important;
   border-radius: 5px !important;
   padding: 1px 6px !important;
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
-}
-html[data-ag-custom-theme].dark code:not(pre *):not(.xterm *):not(.monaco-editor *):not([data-testid="media-modal"] *):not(.settings-modal-container *),
-html[data-ag-custom-theme]:has(> body.dark) code:not(pre *):not(.xterm *):not(.monaco-editor *):not([data-testid="media-modal"] *):not(.settings-modal-container *),
-html[data-ag-custom-theme].theme-dark code:not(pre *):not(.xterm *):not(.monaco-editor *):not([data-testid="media-modal"] *):not(.settings-modal-container *),
-html[data-ag-custom-theme].dark-theme code:not(pre *):not(.xterm *):not(.monaco-editor *):not([data-testid="media-modal"] *):not(.settings-modal-container *) {
-  background-color: rgba(245, 158, 11, 0.11) !important;
-  color: #F6C177 !important;
-  border: 1px solid rgba(246, 193, 119, 0.24) !important;
 }
 
 /* Markdown 阅读层级增强（修复 --muted/--secondary 透明导致的容器边界丢失，官方原版零侵入） */
@@ -302,4 +316,63 @@ html[data-ag-custom-theme] [data-markdown-root]:not(.settings-modal-container *)
 }
 html[data-ag-custom-theme]:is(.dark, :has(> body.dark), .theme-dark, .dark-theme) [data-markdown-root]:not(.settings-modal-container *):not([data-testid="media-modal"] *) hr {
   background-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+/* P0 细节：Markdown 列表项目符号与嵌套层级引导线 */
+html[data-ag-custom-theme] [data-markdown-root]:not(.settings-modal-container *):not([data-testid="media-modal"] *) :is(ul, ol):not(.contains-task-list) > li:not(.task-list-item)::marker {
+  color: color-mix(in srgb, var(--primary) 80%, var(--foreground)) !important;
+  font-weight: 600;
+}
+html[data-ag-custom-theme] [data-markdown-root]:not(.settings-modal-container *):not([data-testid="media-modal"] *) :is(ul, ol) :is(ul, ol) {
+  border-inline-start: 1px solid color-mix(in srgb, var(--primary) 22%, transparent);
+  padding-inline-start: 1.15em;
+  margin-top: 0.25em;
+}
+
+/* P1：炫彩渐变与长时阅读对比度平衡（强化极光底色上的弱提示文字辨识度） */
+html[data-ag-custom-theme] [data-markdown-root]:not(.settings-modal-container *):not([data-testid="media-modal"] *) {
+  text-rendering: optimizeLegibility;
+}
+html[data-ag-custom-theme] :is([data-markdown-root], [data-testid="hover-card-subtitle"]):not(.settings-modal-container *):not([data-testid="media-modal"] *) :is(.text-muted-foreground, [class*="text-muted-foreground/"]) {
+  color: color-mix(in srgb, var(--foreground) 72%, transparent) !important;
+  opacity: 1 !important;
+}
+html[data-ag-custom-theme]:is(.dark, :has(> body.dark), .theme-dark, .dark-theme) :is([data-markdown-root], [data-testid="hover-card-subtitle"]):not(.settings-modal-container *):not([data-testid="media-modal"] *) :is(.text-muted-foreground, [class*="text-muted-foreground/"]) {
+  color: color-mix(in srgb, var(--foreground) 76%, transparent) !important;
+}
+
+/* P1：交互状态与可点击反馈一致化（文件引用胶囊、工具/步骤卡片与悬停态） */
+html[data-ag-custom-theme] :is(bdi.context-scope-mention, [data-markdown-root] .inline-pill, [data-markdown-root] [data-testid="comment-pill"]):not(.settings-modal-container *):not([data-testid="media-modal"] *) {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 3px !important;
+  vertical-align: -2px !important;
+  line-height: 1.35 !important;
+  background-color: color-mix(in srgb, var(--primary) 8%, transparent) !important;
+  border: 1px solid color-mix(in srgb, var(--primary) 22%, transparent) !important;
+  border-radius: 6px !important;
+  padding: 0 5px !important;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease !important;
+}
+html[data-ag-custom-theme]:is(.dark, :has(> body.dark), .theme-dark, .dark-theme) :is(bdi.context-scope-mention, [data-markdown-root] .inline-pill, [data-markdown-root] [data-testid="comment-pill"]):not(.settings-modal-container *):not([data-testid="media-modal"] *) {
+  background-color: color-mix(in srgb, var(--primary) 13%, transparent) !important;
+  border-color: color-mix(in srgb, var(--primary) 28%, transparent) !important;
+}
+html[data-ag-custom-theme] :is(bdi.context-scope-mention, [data-markdown-root] .inline-pill, [data-markdown-root] [data-testid="comment-pill"]):not(.settings-modal-container *):not([data-testid="media-modal"] *):hover {
+  background-color: color-mix(in srgb, var(--primary) 18%, transparent) !important;
+  border-color: color-mix(in srgb, var(--primary) 48%, transparent) !important;
+}
+html[data-ag-custom-theme] :is(.rounded-lg, .rounded-xl):is(.border, [class*="border-border"]):is(.bg-card, .bg-muted, [class*="bg-muted/"]):not(.bg-sidebar *):not(.settings-modal-container *):not([data-testid="media-modal"] *):not([data-base-ui-portal] *):not(.monaco-editor *):not(.xterm *):not(#antigravity-theme-dropdown):not(pre > div) {
+  background-color: rgba(255, 255, 255, 0.56) !important;
+  border-color: rgba(15, 23, 42, 0.10) !important;
+}
+html[data-ag-custom-theme]:is(.dark, :has(> body.dark), .theme-dark, .dark-theme) :is(.rounded-lg, .rounded-xl):is(.border, [class*="border-border"]):is(.bg-card, .bg-muted, [class*="bg-muted/"]):not(.bg-sidebar *):not(.settings-modal-container *):not([data-testid="media-modal"] *):not([data-base-ui-portal] *):not(.monaco-editor *):not(.xterm *):not(#antigravity-theme-dropdown):not(pre > div) {
+  background-color: rgba(15, 23, 42, 0.36) !important;
+  border-color: rgba(255, 255, 255, 0.11) !important;
+}
+html[data-ag-custom-theme] :is(button, a, [role="button"], [tabindex]:not([tabindex="-1"])):is([class*="hover:bg-secondary"], [class*="hover:bg-muted"]):not(.bg-sidebar *):not(.settings-modal-container *):not([data-testid="media-modal"] *):not([data-base-ui-portal] *):not(#antigravity-theme-selector *):not(#antigravity-theme-dropdown *):hover {
+  background-color: rgba(15, 23, 42, 0.06) !important;
+}
+html[data-ag-custom-theme]:is(.dark, :has(> body.dark), .theme-dark, .dark-theme) :is(button, a, [role="button"], [tabindex]:not([tabindex="-1"])):is([class*="hover:bg-secondary"], [class*="hover:bg-muted"]):not(.bg-sidebar *):not(.settings-modal-container *):not([data-testid="media-modal"] *):not([data-base-ui-portal] *):not(#antigravity-theme-selector *):not(#antigravity-theme-dropdown *):hover {
+  background-color: rgba(255, 255, 255, 0.08) !important;
 }
