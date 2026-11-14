@@ -277,6 +277,23 @@
         return fallback;
     }
 
+    function ensureThemeAttributes(themeId) {
+        try {
+            const root = document.documentElement;
+            if (!themeId || themeId === 'stock') {
+                root.style.removeProperty('--antigravity-active-theme-id');
+                root.removeAttribute('data-ag-custom-theme');
+                root.removeAttribute('data-ag-theme-id');
+                root.removeAttribute('data-ag-color-scheme');
+            } else {
+                root.style.setProperty('--antigravity-active-theme-id', themeId);
+                root.setAttribute('data-ag-custom-theme', 'true');
+                root.setAttribute('data-ag-theme-id', themeId);
+                root.setAttribute('data-ag-color-scheme', isEffectiveDark() ? 'dark' : 'light');
+            }
+        } catch (e) {}
+    }
+
     function applyTheme(themeId, persistNative) {
         const theme = getTheme(themeId);
         saveThemePref(theme.id, persistNative);
@@ -294,17 +311,7 @@
         styleEl.textContent = themeCssFor(theme);
         styleEl.dataset.themeKey = currentThemeKey(theme);
 
-        try {
-            if (theme.id === 'stock') {
-                document.documentElement.style.removeProperty('--antigravity-active-theme-id');
-                document.documentElement.removeAttribute('data-ag-custom-theme');
-                document.documentElement.removeAttribute('data-ag-theme-id');
-            } else {
-                document.documentElement.style.setProperty('--antigravity-active-theme-id', theme.id);
-                document.documentElement.setAttribute('data-ag-custom-theme', 'true');
-                document.documentElement.setAttribute('data-ag-theme-id', theme.id);
-            }
-        } catch (e) {}
+        ensureThemeAttributes(theme.id);
 
         enforceTitleBarColor(true);
         updateSelectorUI(theme.id);
@@ -731,6 +738,7 @@
         lastEffectiveDark = currentEffectiveDark;
 
         if (effectiveChanged) {
+            ensureThemeAttributes(activeId);
             if (activeId !== 'stock') {
                 const theme = getTheme(activeId);
                 let styleEl = document.getElementById('antigravity-active-theme');
@@ -1174,6 +1182,7 @@
             const activeId = activeThemeId();
             const theme = getTheme(activeId);
             const desiredKey = currentThemeKey(theme);
+            ensureThemeAttributes(activeId);
             if (activeId !== 'stock') {
                 syncAuxPaneState();
             }

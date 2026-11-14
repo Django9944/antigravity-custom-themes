@@ -214,27 +214,72 @@ html[data-ag-custom-theme] [data-testid="right-cluster-fade"] {
   opacity: 0 !important;
 }
 
-/* 风格 1：高辨识行内代码胶囊 + P2 主题色彩人格适配（仅在启用自定义主题 html[data-ag-custom-theme] 时生效，官方原版零侵入） */
+/* 风格 1：高辨识行内代码胶囊 + P2 全 6 套主题独立色彩适配（仅在启用自定义主题 html[data-ag-custom-theme] 时生效，官方原版零侵入） */
+/* 默认 / 四色极光 / 暗夜极光 (gemini)：暖金琥珀 */
 html[data-ag-custom-theme] {
   --ag-inline-code-bg: rgba(217, 119, 6, 0.10);
   --ag-inline-code-fg: #B45309;
   --ag-inline-code-border: rgba(180, 83, 9, 0.22);
 }
-html[data-ag-custom-theme]:is(.dark, :has(> body.dark), .theme-dark, .dark-theme) {
+html[data-ag-custom-theme]:is([data-ag-color-scheme="dark"], .dark, :has(> body.dark), .theme-dark, .dark-theme) {
   --ag-inline-code-bg: rgba(245, 158, 11, 0.11);
   --ag-inline-code-fg: #F6C177;
   --ag-inline-code-border: rgba(246, 193, 119, 0.24);
 }
-/* 暖橙 / 绯红暖色系主题切换为高辨识冷青绿胶囊，避免“暖字撞暖底” */
-html[data-ag-custom-theme]:is([data-ag-theme-id="orange"], [data-ag-theme-id="red"]) {
+/* 蔚蓝晴空 / 深海晴空 (sky)：清透电青 */
+html[data-ag-custom-theme][data-ag-theme-id="sky"] {
+  --ag-inline-code-bg: rgba(2, 132, 199, 0.09);
+  --ag-inline-code-fg: #0369A1;
+  --ag-inline-code-border: rgba(2, 132, 199, 0.24);
+}
+html[data-ag-custom-theme][data-ag-theme-id="sky"]:is([data-ag-color-scheme="dark"], .dark, :has(> body.dark), .theme-dark, .dark-theme) {
+  --ag-inline-code-bg: rgba(34, 211, 238, 0.11);
+  --ag-inline-code-fg: #67E8F9;
+  --ag-inline-code-border: rgba(103, 232, 249, 0.26);
+}
+/* 碧水青波 / 幽谷碧波 (cyan)：柔珊瑚玫瑰粉（与碧青底色形成互补） */
+html[data-ag-custom-theme][data-ag-theme-id="cyan"] {
+  --ag-inline-code-bg: rgba(219, 39, 119, 0.08);
+  --ag-inline-code-fg: #BE185D;
+  --ag-inline-code-border: rgba(190, 24, 93, 0.22);
+}
+html[data-ag-custom-theme][data-ag-theme-id="cyan"]:is([data-ag-color-scheme="dark"], .dark, :has(> body.dark), .theme-dark, .dark-theme) {
+  --ag-inline-code-bg: rgba(244, 114, 182, 0.11);
+  --ag-inline-code-fg: #F9A8D4;
+  --ag-inline-code-border: rgba(249, 168, 212, 0.25);
+}
+/* 落霞暖橙 / 熔岩暮色 (orange)：高辨识薄荷翠 */
+html[data-ag-custom-theme][data-ag-theme-id="orange"] {
   --ag-inline-code-bg: rgba(13, 148, 136, 0.10);
   --ag-inline-code-fg: #0F766E;
   --ag-inline-code-border: rgba(13, 148, 136, 0.24);
 }
-html[data-ag-custom-theme]:is([data-ag-theme-id="orange"], [data-ag-theme-id="red"]):is(.dark, :has(> body.dark), .theme-dark, .dark-theme) {
+html[data-ag-custom-theme][data-ag-theme-id="orange"]:is([data-ag-color-scheme="dark"], .dark, :has(> body.dark), .theme-dark, .dark-theme) {
   --ag-inline-code-bg: rgba(45, 212, 191, 0.11);
   --ag-inline-code-fg: #5EEAD4;
   --ag-inline-code-border: rgba(94, 234, 212, 0.26);
+}
+/* 丹霞绯红 / 丝绒酒红 (red)：冷冽冰湖蓝 */
+html[data-ag-custom-theme][data-ag-theme-id="red"] {
+  --ag-inline-code-bg: rgba(37, 99, 235, 0.09);
+  --ag-inline-code-fg: #1D4ED8;
+  --ag-inline-code-border: rgba(37, 99, 235, 0.22);
+}
+html[data-ag-custom-theme][data-ag-theme-id="red"]:is([data-ag-color-scheme="dark"], .dark, :has(> body.dark), .theme-dark, .dark-theme) {
+  --ag-inline-code-bg: rgba(96, 165, 250, 0.12);
+  --ag-inline-code-fg: #93C5FD;
+  --ag-inline-code-border: rgba(147, 197, 253, 0.26);
+}
+/* 紫罗幽兰 / 幻夜幽紫 (purple)：兰花紫粉 */
+html[data-ag-custom-theme][data-ag-theme-id="purple"] {
+  --ag-inline-code-bg: rgba(162, 28, 175, 0.08);
+  --ag-inline-code-fg: #A21CAF;
+  --ag-inline-code-border: rgba(162, 28, 175, 0.22);
+}
+html[data-ag-custom-theme][data-ag-theme-id="purple"]:is([data-ag-color-scheme="dark"], .dark, :has(> body.dark), .theme-dark, .dark-theme) {
+  --ag-inline-code-bg: rgba(232, 121, 249, 0.11);
+  --ag-inline-code-fg: #F0ABFC;
+  --ag-inline-code-border: rgba(240, 171, 252, 0.26);
 }
 
 html[data-ag-custom-theme] code:not(pre *):not(.xterm *):not(.monaco-editor *):not([data-testid="media-modal"] *):not(.settings-modal-container *) {
