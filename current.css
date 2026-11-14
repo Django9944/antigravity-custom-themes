@@ -213,3 +213,22 @@ html[data-ag-custom-theme] [data-testid="right-cluster-fade"] {
   background-image: none !important;
   opacity: 0 !important;
 }
+
+/* 风格 1：高辨识暖金系行内代码胶囊（仅在启用自定义主题 html[data-ag-custom-theme] 时生效，官方原版零侵入） */
+html[data-ag-custom-theme] code:not(pre *):not(.xterm *):not(.monaco-editor *):not([data-testid="media-modal"] *):not(.settings-modal-container *) {
+  background-color: rgba(217, 119, 6, 0.10) !important;
+  color: #B45309 !important;
+  border: 1px solid rgba(180, 83, 9, 0.22) !important;
+  border-radius: 5px !important;
+  padding: 1px 6px !important;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+html[data-ag-custom-theme].dark code:not(pre *):not(.xterm *):not(.monaco-editor *):not([data-testid="media-modal"] *):not(.settings-modal-container *),
+html[data-ag-custom-theme]:has(> body.dark) code:not(pre *):not(.xterm *):not(.monaco-editor *):not([data-testid="media-modal"] *):not(.settings-modal-container *),
+html[data-ag-custom-theme].theme-dark code:not(pre *):not(.xterm *):not(.monaco-editor *):not([data-testid="media-modal"] *):not(.settings-modal-container *),
+html[data-ag-custom-theme].dark-theme code:not(pre *):not(.xterm *):not(.monaco-editor *):not([data-testid="media-modal"] *):not(.settings-modal-container *) {
+  background-color: rgba(245, 158, 11, 0.11) !important;
+  color: #F6C177 !important;
+  border: 1px solid rgba(246, 193, 119, 0.24) !important;
+}
