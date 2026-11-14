@@ -447,27 +447,28 @@ html[data-ag-custom-theme]:is(.dark, :has(> body.dark), .theme-dark, .dark-theme
   background-color: rgba(255, 255, 255, 0.08) !important;
 }
 
-/* 生成文档 / 变更文件汇总卡片（Walkthrough、changed-files-card）静止底面与鼠标悬停反馈 */
-html[data-ag-custom-theme] :is([data-testid="artifact-card"], .artifact-card, [data-testid="bubble-artifact-card"], [data-testid="changed-files-card-header"]):not(.settings-modal-container *):not([data-testid="media-modal"] *) {
+/* 生成文档 / 变更文件汇总 / Automations 卡片静止底面、悬停与按下瞬间反馈 */
+html[data-ag-custom-theme] :is([data-testid="artifact-card"], .artifact-card, [data-testid="bubble-artifact-card"], [data-testid="changed-files-card-header"], [data-testid="automation-settings"]):not(.settings-modal-container *):not([data-testid="media-modal"] *) {
   background-color: rgba(255, 255, 255, 0.48) !important;
   border-color: rgba(15, 23, 42, 0.10) !important;
   transition: background-color 0.15s ease, border-color 0.15s ease !important;
 }
-html[data-ag-custom-theme]:is([data-ag-color-scheme="dark"], .dark, :has(> body.dark), .theme-dark, .dark-theme) :is([data-testid="artifact-card"], .artifact-card, [data-testid="bubble-artifact-card"], [data-testid="changed-files-card-header"]):not(.settings-modal-container *):not([data-testid="media-modal"] *) {
+html[data-ag-custom-theme]:is([data-ag-color-scheme="dark"], .dark, :has(> body.dark), .theme-dark, .dark-theme) :is([data-testid="artifact-card"], .artifact-card, [data-testid="bubble-artifact-card"], [data-testid="changed-files-card-header"], [data-testid="automation-settings"]):not(.settings-modal-container *):not([data-testid="media-modal"] *) {
   background-color: rgba(15, 23, 42, 0.30) !important;
   border-color: rgba(255, 255, 255, 0.11) !important;
 }
-html[data-ag-custom-theme] :is([data-testid="artifact-card"], .artifact-card, [data-testid="bubble-artifact-card"], [data-testid="changed-files-card-header"], [data-testid="changed-files-card"] .cursor-pointer, [data-testid="changed-files-card"] [class*="hover:bg-"]):not(.settings-modal-container *):not([data-testid="media-modal"] *):hover {
+html[data-ag-custom-theme] :is([data-testid="artifact-card"], .artifact-card, [data-testid="bubble-artifact-card"], [data-testid="changed-files-card-header"], [data-testid="automation-settings"], [data-testid="changed-files-card"] .cursor-pointer, [data-testid="changed-files-card"] [class*="hover:bg-"], [data-testid="empty-file-open-button"]):not(.settings-modal-container *):not([data-testid="media-modal"] *):hover {
   background-color: rgba(255, 255, 255, 0.78) !important;
   border-color: color-mix(in srgb, var(--primary) 34%, rgba(15, 23, 42, 0.14)) !important;
 }
-html[data-ag-custom-theme]:is([data-ag-color-scheme="dark"], .dark, :has(> body.dark), .theme-dark, .dark-theme) :is([data-testid="artifact-card"], .artifact-card, [data-testid="bubble-artifact-card"], [data-testid="changed-files-card-header"], [data-testid="changed-files-card"] .cursor-pointer, [data-testid="changed-files-card"] [class*="hover:bg-"]):not(.settings-modal-container *):not([data-testid="media-modal"] *):hover {
+html[data-ag-custom-theme]:is([data-ag-color-scheme="dark"], .dark, :has(> body.dark), .theme-dark, .dark-theme) :is([data-testid="artifact-card"], .artifact-card, [data-testid="bubble-artifact-card"], [data-testid="changed-files-card-header"], [data-testid="automation-settings"], [data-testid="changed-files-card"] .cursor-pointer, [data-testid="changed-files-card"] [class*="hover:bg-"], [data-testid="empty-file-open-button"]):not(.settings-modal-container *):not([data-testid="media-modal"] *):hover {
   background-color: color-mix(in srgb, var(--primary) 16%, rgba(15, 23, 42, 0.46)) !important;
   border-color: color-mix(in srgb, var(--primary) 38%, rgba(255, 255, 255, 0.14)) !important;
 }
 html[data-ag-custom-theme] [data-testid="changed-files-card-review"] {
   background-color: rgba(255, 255, 255, 0.64) !important;
   border-color: rgba(15, 23, 42, 0.14) !important;
+  transition: background-color 0.15s ease, border-color 0.15s ease !important;
 }
 html[data-ag-custom-theme]:is([data-ag-color-scheme="dark"], .dark, :has(> body.dark), .theme-dark, .dark-theme) [data-testid="changed-files-card-review"] {
   background-color: rgba(255, 255, 255, 0.08) !important;
@@ -480,4 +481,111 @@ html[data-ag-custom-theme] [data-testid="changed-files-card-review"]:hover {
 html[data-ag-custom-theme]:is([data-ag-color-scheme="dark"], .dark, :has(> body.dark), .theme-dark, .dark-theme) [data-testid="changed-files-card-review"]:hover {
   background-color: color-mix(in srgb, var(--primary) 24%, rgba(255, 255, 255, 0.10)) !important;
   border-color: color-mix(in srgb, var(--primary) 48%, rgba(255, 255, 255, 0.18)) !important;
+}
+html[data-ag-custom-theme] :is([data-testid="artifact-card"], .artifact-card, [data-testid="bubble-artifact-card"], [data-testid="changed-files-card-header"], [data-testid="changed-files-card-review"], [data-testid="automation-settings"]):not(.settings-modal-container *):not([data-testid="media-modal"] *):active {
+  background-color: rgba(255, 255, 255, 0.88) !important;
+}
+html[data-ag-custom-theme]:is([data-ag-color-scheme="dark"], .dark, :has(> body.dark), .theme-dark, .dark-theme) :is([data-testid="artifact-card"], .artifact-card, [data-testid="bubble-artifact-card"], [data-testid="changed-files-card-header"], [data-testid="changed-files-card-review"], [data-testid="automation-settings"]):not(.settings-modal-container *):not([data-testid="media-modal"] *):active {
+  background-color: color-mix(in srgb, var(--primary) 24%, rgba(15, 23, 42, 0.56)) !important;
+}
+
+/* 1. 划词悬浮操作条（.agy-selection-pill / .selection-popup）高对比毛玻璃底衬与内部悬停/按下态 */
+html[data-ag-custom-theme] :is(.agy-selection-pill, .selection-popup .agy-selection-pill):not(.settings-modal-container *):not([data-testid="media-modal"] *) {
+  background-color: rgba(255, 255, 255, 0.90) !important;
+  backdrop-filter: blur(14px) !important;
+  -webkit-backdrop-filter: blur(14px) !important;
+  border: 1px solid rgba(15, 23, 42, 0.12) !important;
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.12), 0 1px 4px rgba(15, 23, 42, 0.06) !important;
+}
+html[data-ag-custom-theme]:is([data-ag-color-scheme="dark"], .dark, :has(> body.dark), .theme-dark, .dark-theme) :is(.agy-selection-pill, .selection-popup .agy-selection-pill):not(.settings-modal-container *):not([data-testid="media-modal"] *) {
+  background-color: rgba(15, 23, 42, 0.88) !important;
+  border-color: rgba(255, 255, 255, 0.16) !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.42), 0 2px 6px rgba(0, 0, 0, 0.24) !important;
+}
+html[data-ag-custom-theme] :is(.agy-selection-pill button, [data-testid="pane-selection-add-to-chat"] button, [data-testid="selection-comment-button"]):not(.settings-modal-container *):not([data-testid="media-modal"] *):hover {
+  background-color: color-mix(in srgb, var(--primary) 16%, transparent) !important;
+}
+html[data-ag-custom-theme]:is([data-ag-color-scheme="dark"], .dark, :has(> body.dark), .theme-dark, .dark-theme) :is(.agy-selection-pill button, [data-testid="pane-selection-add-to-chat"] button, [data-testid="selection-comment-button"]):not(.settings-modal-container *):not([data-testid="media-modal"] *):hover {
+  background-color: color-mix(in srgb, var(--primary) 24%, transparent) !important;
+}
+html[data-ag-custom-theme] :is(.agy-selection-pill button, [data-testid="pane-selection-add-to-chat"] button, [data-testid="selection-comment-button"]):not(.settings-modal-container *):not([data-testid="media-modal"] *):active {
+  background-color: color-mix(in srgb, var(--primary) 26%, transparent) !important;
+}
+html[data-ag-custom-theme]:is([data-ag-color-scheme="dark"], .dark, :has(> body.dark), .theme-dark, .dark-theme) :is(.agy-selection-pill button, [data-testid="pane-selection-add-to-chat"] button, [data-testid="selection-comment-button"]):not(.settings-modal-container *):not([data-testid="media-modal"] *):active {
+  background-color: color-mix(in srgb, var(--primary) 34%, transparent) !important;
+}
+
+/* 2. 通用文件条目行（[data-file-uri]）补全 6px 圆角与跨区域悬停/聚焦态 */
+html[data-ag-custom-theme] [data-file-uri]:is(.cursor-pointer, [role="button"]):not(.bg-sidebar *):not(.settings-modal-container *):not([data-testid="media-modal"] *) {
+  border-radius: 6px !important;
+  transition: background-color 0.15s ease !important;
+}
+html[data-ag-custom-theme] [data-file-uri]:is(.cursor-pointer, [role="button"]):not(.bg-sidebar *):not(.settings-modal-container *):not([data-testid="media-modal"] *):is(:hover, :focus-visible) {
+  background-color: rgba(255, 255, 255, 0.72) !important;
+}
+html[data-ag-custom-theme]:is([data-ag-color-scheme="dark"], .dark, :has(> body.dark), .theme-dark, .dark-theme) [data-file-uri]:is(.cursor-pointer, [role="button"]):not(.bg-sidebar *):not(.settings-modal-container *):not([data-testid="media-modal"] *):is(:hover, :focus-visible) {
+  background-color: color-mix(in srgb, var(--primary) 16%, rgba(15, 23, 42, 0.42)) !important;
+}
+
+/* 3. 代码块 Preview/Raw 分段切换器、消息点赞激活态与撤回按钮反馈 */
+html[data-ag-custom-theme] [data-testid="code-block-preview-toggle"] {
+  background-color: rgba(15, 23, 42, 0.06) !important;
+  border-radius: 6px !important;
+  padding: 2px !important;
+}
+html[data-ag-custom-theme]:is([data-ag-color-scheme="dark"], .dark, :has(> body.dark), .theme-dark, .dark-theme) [data-testid="code-block-preview-toggle"] {
+  background-color: rgba(255, 255, 255, 0.07) !important;
+}
+html[data-ag-custom-theme] :is([data-testid="code-block-preview-button"], [data-testid="code-block-raw-button"]):is([data-state="active"], [aria-checked="true"], [aria-selected="true"], [aria-pressed="true"], .bg-secondary, .bg-background) {
+  background-color: rgba(255, 255, 255, 0.88) !important;
+  color: var(--foreground) !important;
+  border-radius: 4px !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08) !important;
+}
+html[data-ag-custom-theme]:is([data-ag-color-scheme="dark"], .dark, :has(> body.dark), .theme-dark, .dark-theme) :is([data-testid="code-block-preview-button"], [data-testid="code-block-raw-button"]):is([data-state="active"], [aria-checked="true"], [aria-selected="true"], [aria-pressed="true"], .bg-secondary, .bg-background) {
+  background-color: color-mix(in srgb, var(--primary) 24%, rgba(15, 23, 42, 0.65)) !important;
+  color: var(--foreground) !important;
+  box-shadow: none !important;
+}
+html[data-ag-custom-theme] button[aria-pressed="true"]:not(.bg-sidebar *):not(.settings-modal-container *):not([data-testid="media-modal"] *) {
+  background-color: color-mix(in srgb, var(--primary) 16%, rgba(255, 255, 255, 0.66)) !important;
+  color: var(--primary) !important;
+}
+html[data-ag-custom-theme]:is([data-ag-color-scheme="dark"], .dark, :has(> body.dark), .theme-dark, .dark-theme) button[aria-pressed="true"]:not(.bg-sidebar *):not(.settings-modal-container *):not([data-testid="media-modal"] *) {
+  background-color: color-mix(in srgb, var(--primary) 22%, transparent) !important;
+  color: var(--primary) !important;
+}
+html[data-ag-custom-theme] [data-testid="revert-button"]:not([aria-disabled="true"]):hover {
+  background-color: rgba(15, 23, 42, 0.06) !important;
+  border-radius: 6px !important;
+}
+html[data-ag-custom-theme]:is([data-ag-color-scheme="dark"], .dark, :has(> body.dark), .theme-dark, .dark-theme) [data-testid="revert-button"]:not([aria-disabled="true"]):hover {
+  background-color: rgba(255, 255, 255, 0.10) !important;
+}
+
+/* 4. 对话区数字计数角标、文件徽章与划词追问引用头（.agy-user-bubble-header） */
+html[data-ag-custom-theme] :is([data-testid="comment-group-count"], [data-testid="file-title-badge"]:not([class*="amber"]), span.rounded-full:is(.bg-muted, .bg-secondary)):not(.bg-sidebar *):not(.settings-modal-container *):not([data-testid="media-modal"] *) {
+  background-color: rgba(15, 23, 42, 0.07) !important;
+  border: 1px solid rgba(15, 23, 42, 0.08) !important;
+}
+html[data-ag-custom-theme]:is([data-ag-color-scheme="dark"], .dark, :has(> body.dark), .theme-dark, .dark-theme) :is([data-testid="comment-group-count"], [data-testid="file-title-badge"]:not([class*="amber"]), span.rounded-full:is(.bg-muted, .bg-secondary)):not(.bg-sidebar *):not(.settings-modal-container *):not([data-testid="media-modal"] *) {
+  background-color: rgba(255, 255, 255, 0.10) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+html[data-ag-custom-theme] :is(.agy-user-bubble-header, [data-testid="side-question-origin"]):not(.settings-modal-container *):not([data-testid="media-modal"] *) {
+  background-color: rgba(255, 255, 255, 0.50) !important;
+  border: 1px solid rgba(15, 23, 42, 0.08) !important;
+  transition: background-color 0.15s ease, border-color 0.15s ease !important;
+}
+html[data-ag-custom-theme]:is([data-ag-color-scheme="dark"], .dark, :has(> body.dark), .theme-dark, .dark-theme) :is(.agy-user-bubble-header, [data-testid="side-question-origin"]):not(.settings-modal-container *):not([data-testid="media-modal"] *) {
+  background-color: rgba(15, 23, 42, 0.36) !important;
+  border-color: rgba(255, 255, 255, 0.10) !important;
+}
+html[data-ag-custom-theme] :is(.agy-user-bubble-header, [data-testid="side-question-origin"]):not(.settings-modal-container *):not([data-testid="media-modal"] *):hover {
+  background-color: rgba(255, 255, 255, 0.78) !important;
+  border-color: color-mix(in srgb, var(--primary) 30%, rgba(15, 23, 42, 0.12)) !important;
+}
+html[data-ag-custom-theme]:is([data-ag-color-scheme="dark"], .dark, :has(> body.dark), .theme-dark, .dark-theme) :is(.agy-user-bubble-header, [data-testid="side-question-origin"]):not(.settings-modal-container *):not([data-testid="media-modal"] *):hover {
+  background-color: color-mix(in srgb, var(--primary) 16%, rgba(15, 23, 42, 0.48)) !important;
+  border-color: color-mix(in srgb, var(--primary) 36%, rgba(255, 255, 255, 0.14)) !important;
 }
