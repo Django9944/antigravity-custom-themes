@@ -167,3 +167,37 @@ html[data-ag-custom-theme][data-aux-pane-maximized="true"] .agy-sheet > div.rela
   app-region: no-drag !important;
   pointer-events: auto !important;
 }
+
+/* 隐式幽灵纯图标按钮（Plan A）：静止时低存在感融入原生工具栏，悬停或展开时显形 */
+#antigravity-theme-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 26px !important;
+  min-width: 26px !important;
+  max-width: 26px !important;
+  height: 26px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  border-radius: 6px !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  opacity: 0.55 !important;
+  filter: saturate(0.35) !important;
+  transition: opacity 0.15s ease, filter 0.15s ease, background-color 0.15s ease !important;
+}
+#antigravity-theme-btn:hover,
+#antigravity-theme-btn[aria-expanded="true"] {
+  opacity: 1 !important;
+  filter: saturate(1) !important;
+  background: rgba(0, 0, 0, 0.06) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+#antigravity-theme-btn[data-theme-mode="dark"]:hover,
+#antigravity-theme-btn[data-theme-mode="dark"][aria-expanded="true"] {
+  background: rgba(255, 255, 255, 0.10) !important;
+}
