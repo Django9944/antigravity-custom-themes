@@ -232,3 +232,74 @@ html[data-ag-custom-theme].dark-theme code:not(pre *):not(.xterm *):not(.monaco-
   color: #F6C177 !important;
   border: 1px solid rgba(246, 193, 119, 0.24) !important;
 }
+
+/* Markdown 阅读层级增强（修复 --muted/--secondary 透明导致的容器边界丢失，官方原版零侵入） */
+html[data-ag-custom-theme] [data-markdown-root]:not(.settings-modal-container *):not([data-testid="media-modal"] *) pre > :is(div.rounded-xl, div.rounded-lg):not(.xterm *):not(.monaco-editor *) {
+  background-color: rgba(255, 255, 255, 0.72) !important;
+  border: 1px solid rgba(15, 23, 42, 0.09) !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04) !important;
+}
+html[data-ag-custom-theme]:is(.dark, :has(> body.dark), .theme-dark, .dark-theme) [data-markdown-root]:not(.settings-modal-container *):not([data-testid="media-modal"] *) pre > :is(div.rounded-xl, div.rounded-lg):not(.xterm *):not(.monaco-editor *) {
+  background-color: rgba(10, 16, 30, 0.62) !important;
+  border: 1px solid rgba(255, 255, 255, 0.10) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22) !important;
+}
+html[data-ag-custom-theme] [data-markdown-root]:not(.settings-modal-container *):not([data-testid="media-modal"] *) pre > div > div:first-child:has(button) {
+  border-bottom: 1px solid rgba(15, 23, 42, 0.07) !important;
+}
+html[data-ag-custom-theme]:is(.dark, :has(> body.dark), .theme-dark, .dark-theme) [data-markdown-root]:not(.settings-modal-container *):not([data-testid="media-modal"] *) pre > div > div:first-child:has(button) {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+html[data-ag-custom-theme] [data-markdown-root]:not(.settings-modal-container *):not([data-testid="media-modal"] *) .agy-md-table {
+  border-color: rgba(15, 23, 42, 0.12) !important;
+  background-color: rgba(255, 255, 255, 0.48) !important;
+}
+html[data-ag-custom-theme]:is(.dark, :has(> body.dark), .theme-dark, .dark-theme) [data-markdown-root]:not(.settings-modal-container *):not([data-testid="media-modal"] *) .agy-md-table {
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  background-color: rgba(15, 23, 42, 0.35) !important;
+}
+html[data-ag-custom-theme] [data-markdown-root]:not(.settings-modal-container *):not([data-testid="media-modal"] *) .agy-md-table th {
+  background-color: rgba(15, 23, 42, 0.05) !important;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.10) !important;
+}
+html[data-ag-custom-theme]:is(.dark, :has(> body.dark), .theme-dark, .dark-theme) [data-markdown-root]:not(.settings-modal-container *):not([data-testid="media-modal"] *) .agy-md-table th {
+  background-color: rgba(255, 255, 255, 0.06) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.10) !important;
+}
+
+html[data-ag-custom-theme] [data-markdown-root]:not(.settings-modal-container *):not([data-testid="media-modal"] *) blockquote:not(.markdown-alert) {
+  background-color: color-mix(in srgb, var(--primary) 6%, transparent) !important;
+  border-radius: 0 8px 8px 0 !important;
+  padding: 6px 12px 6px 14px !important;
+}
+html[data-ag-custom-theme]:is(.dark, :has(> body.dark), .theme-dark, .dark-theme) [data-markdown-root]:not(.settings-modal-container *):not([data-testid="media-modal"] *) blockquote:not(.markdown-alert) {
+  background-color: color-mix(in srgb, var(--primary) 9%, transparent) !important;
+}
+html[data-ag-custom-theme] [data-markdown-root]:not(.settings-modal-container *):not([data-testid="media-modal"] *) blockquote:not(.markdown-alert)::before {
+  background-color: var(--primary) !important;
+  opacity: 0.85 !important;
+}
+
+html[data-ag-custom-theme] [data-markdown-root]:not(.settings-modal-container *):not([data-testid="media-modal"] *) :is(strong, b):not(a *):not(pre *) {
+  color: #0B1324 !important;
+  font-weight: 600 !important;
+}
+html[data-ag-custom-theme]:is(.dark, :has(> body.dark), .theme-dark, .dark-theme) [data-markdown-root]:not(.settings-modal-container *):not([data-testid="media-modal"] *) :is(strong, b):not(a *):not(pre *) {
+  color: #FFFFFF !important;
+}
+
+html[data-ag-custom-theme] [data-markdown-root]:not(.settings-modal-container *):not([data-testid="media-modal"] *) :is(p, li, td, th, blockquote) a:not(:has(svg)):not([role="button"]) {
+  color: var(--primary) !important;
+  text-underline-offset: 3px;
+}
+html[data-ag-custom-theme] [data-markdown-root]:not(.settings-modal-container *):not([data-testid="media-modal"] *) :is(p, li, td, th, blockquote) a:not(:has(svg)):not([role="button"]):hover {
+  text-decoration: underline !important;
+}
+
+html[data-ag-custom-theme] [data-markdown-root]:not(.settings-modal-container *):not([data-testid="media-modal"] *) hr {
+  background-color: rgba(15, 23, 42, 0.12) !important;
+}
+html[data-ag-custom-theme]:is(.dark, :has(> body.dark), .theme-dark, .dark-theme) [data-markdown-root]:not(.settings-modal-container *):not([data-testid="media-modal"] *) hr {
+  background-color: rgba(255, 255, 255, 0.12) !important;
+}

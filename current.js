@@ -779,13 +779,28 @@
         }, true);
     }
 
+    function themePreviewSwatches(t, isDark) {
+        if (!t || t.id === 'stock') {
+            return isDark
+                ? { base: '#18181b', accent: '#6b7280' }
+                : { base: '#f4f4f5', accent: '#6b7280' };
+        }
+        const rawTokens = (isDark && t.tokensDark) ? t.tokensDark : (t.tokens || {});
+        const rawAccent = rawTokens['--primary'] || '';
+        const accent = String(rawAccent).replace(/\s*!important\s*$/i, '').trim() || (isDark ? '#60A5FA' : '#1A73E8');
+        const base = (isDark ? t.titlebarColorDark : t.titlebarColor) || (isDark ? '#0F1626' : '#E9F0FE');
+        return { base, accent };
+    }
+
     function updateSelectorUI(activeId) {
         const theme = getTheme(activeId);
         const isDarkTheme = resolveSelectorDark(activeId);
+        const effectiveDark = isEffectiveDark();
         const iconEl = document.getElementById('antigravity-theme-icon');
         const btn = document.getElementById('antigravity-theme-btn');
         const dropdown = document.getElementById('antigravity-theme-dropdown');
-        const labelText = themeNameFor(theme, isEffectiveDark());
+        const labelText = themeNameFor(theme, effectiveDark);
+        const swatchRing = isDarkTheme ? 'rgba(255, 255, 255, 0.24)' : 'rgba(15, 23, 42, 0.16)';
 
         if (iconEl) iconEl.innerHTML = renderThemeIcon(theme.icon, 'btn');
 
@@ -819,9 +834,29 @@
             el.style.fontWeight = isCurrent ? '600' : 'normal';
             const nameSpan = el.querySelector('.antigravity-theme-item-text');
             if (nameSpan && t) {
-                nameSpan.textContent = themeNameFor(t, isEffectiveDark());
+                nameSpan.textContent = themeNameFor(t, effectiveDark);
+            }
+            if (t) {
+                const swatch = themePreviewSwatches(t, effectiveDark);
+                const baseDot = el.querySelector('.ag-swatch-base');
+                const accentDot = el.querySelector('.ag-swatch-accent');
+                if (baseDot) {
+                    baseDot.style.background = swatch.base;
+                    baseDot.style.borderColor = swatchRing;
+                }
+                if (accentDot) {
+                    accentDot.style.background = swatch.accent;
+                    accentDot.style.borderColor = swatchRing;
+                }
             }
         });
+
+        const modeHint = document.getElementById('antigravity-theme-mode-hint');
+        if (modeHint) {
+            modeHint.textContent = effectiveDark ? '深色外观 · 跟随宿主' : '浅色外观 · 跟随宿主';
+            modeHint.style.borderTopColor = isDarkTheme ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.08)';
+            modeHint.style.color = isDarkTheme ? 'rgba(243, 244, 246, 0.56)' : 'rgba(27, 42, 74, 0.54)';
+        }
     }
 
     function findActiveToolbar() {
@@ -875,7 +910,7 @@
         if (open) {
             if (targetBtn) {
                 const rect = targetBtn.getBoundingClientRect();
-                const ddWidth = Math.max(Math.round(rect.width), 124);
+                const ddWidth = Math.max(Math.round(rect.width), 164);
                 const rightAnchor = rect.right || (rect.left + rect.width);
                 const maxLeft = Math.max(8, (window.innerWidth || 1200) - ddWidth - 8);
                 const left = Math.max(8, Math.min(Math.round(rightAnchor - ddWidth), maxLeft));
@@ -999,10 +1034,18 @@
                 pointer-events: auto;
             `;
             applyNoDragStyle(item);
+            const effectiveDark = isEffectiveDark();
+            const initialDark = resolveSelectorDark(currentId);
+            const swatch = themePreviewSwatches(t, effectiveDark);
+            const swatchRing = initialDark ? 'rgba(255, 255, 255, 0.24)' : 'rgba(15, 23, 42, 0.16)';
             item.innerHTML = `
-                <span style="display: inline-flex; align-items: center; gap: 7px; width: 100%;">
+                <span style="display: inline-flex; align-items: center; gap: 7px; width: 100%; min-width: 0;">
                     <span style="display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px; flex-shrink: 0; line-height: 1;">${renderThemeIcon(t.icon, 'dd-' + t.id)}</span>
-                    <span class="antigravity-theme-item-text" style="font-size: 12px; line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${themeNameFor(t, isEffectiveDark())}</span>
+                    <span class="antigravity-theme-item-text" style="font-size: 12px; line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0;">${themeNameFor(t, effectiveDark)}</span>
+                    <span class="antigravity-theme-item-swatch" style="display: inline-flex; align-items: center; flex-shrink: 0; margin-left: 6px;">
+                        <span class="ag-swatch-base" style="width: 10px; height: 10px; border-radius: 50%; background: ${swatch.base}; border: 1px solid ${swatchRing}; box-sizing: border-box;"></span>
+                        <span class="ag-swatch-accent" style="width: 10px; height: 10px; border-radius: 50%; background: ${swatch.accent}; border: 1px solid ${swatchRing}; margin-left: -3px; box-sizing: border-box;"></span>
+                    </span>
                 </span>
             `;
 
@@ -1027,6 +1070,23 @@
             };
             dropdown.appendChild(item);
         });
+
+        const modeHintDark = resolveSelectorDark(currentId);
+        const modeHint = document.createElement('div');
+        modeHint.id = 'antigravity-theme-mode-hint';
+        modeHint.style.cssText = `
+            margin-top: 4px;
+            padding: 5px 8px 2px;
+            border-top: 1px solid ${modeHintDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.08)'};
+            font-size: 10.5px;
+            line-height: 1.3;
+            color: ${modeHintDark ? 'rgba(243, 244, 246, 0.56)' : 'rgba(27, 42, 74, 0.54)'};
+            text-align: center;
+            user-select: none;
+            pointer-events: none;
+        `;
+        modeHint.textContent = isEffectiveDark() ? '深色外观 · 跟随宿主' : '浅色外观 · 跟随宿主';
+        dropdown.appendChild(modeHint);
 
         btn.onclick = (e) => {
             e.preventDefault();
