@@ -1,0 +1,11 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Backups & Temp files
+*.bak
+*.tmp
+*.stock
+*.orig
