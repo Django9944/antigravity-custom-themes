@@ -832,13 +832,82 @@
         });
     }
 
+    function findActiveToolbar() {
+        const toolbars = Array.from(document.querySelectorAll('[data-testid="pane-titlebar-toolbar"]'));
+        if (!toolbars.length) return null;
+        const visible = toolbars.filter((el) => {
+            try {
+                if (el.closest('[aria-hidden="true"]')) return false;
+                const rect = el.getBoundingClientRect();
+                return rect.width > 0 && rect.height > 0;
+            } catch (e) { return false; }
+        });
+        const candidates = visible.length ? visible : toolbars;
+        candidates.sort((a, b) => {
+            try {
+                const ra = a.getBoundingClientRect();
+                const rb = b.getBoundingClientRect();
+                if (Math.abs(ra.top - rb.top) > 12) return ra.top - rb.top;
+                return rb.right - ra.right;
+            } catch (e) { return 0; }
+        });
+        return candidates[0] || null;
+    }
+
+    function resolveToolbarMountTarget(toolbar) {
+        if (!toolbar) return null;
+        try {
+            for (const child of toolbar.children) {
+                if (child.tagName !== 'DIV') continue;
+                const inlineStyle = child.getAttribute('style') || '';
+                const appRegion = child.style && (child.style.webkitAppRegion || child.style.appRegion);
+                if (appRegion === 'no-drag' || /app-region\s*:\s*no-drag/i.test(inlineStyle) || child.classList.contains('flex')) {
+                    return child;
+                }
+            }
+        } catch (e) {}
+        return toolbar;
+    }
+
+    function applyNoDragStyle(el) {
+        if (!el || !el.style) return;
+        try {
+            el.style.setProperty('-webkit-app-region', 'no-drag', 'important');
+            el.style.setProperty('app-region', 'no-drag', 'important');
+        } catch (e) {}
+    }
+
+    function setDropdownOpenState(dropdown, open, btn) {
+        if (!dropdown) return;
+        if (open) {
+            if (btn) {
+                const rect = btn.getBoundingClientRect();
+                const ddWidth = Math.max(Math.round(rect.width), 120);
+                const maxLeft = Math.max(8, (window.innerWidth || 1200) - ddWidth - 8);
+                const left = Math.max(8, Math.min(Math.round(rect.left), maxLeft));
+                dropdown.style.top = `${Math.round(rect.bottom + 6)}px`;
+                dropdown.style.left = `${left}px`;
+                dropdown.style.right = 'auto';
+                dropdown.style.width = `${ddWidth}px`;
+                dropdown.style.minWidth = 'unset';
+                dropdown.style.boxSizing = 'border-box';
+            }
+            dropdown.style.display = 'block';
+            dropdown.setAttribute('data-browser-occluder', 'true');
+        } else {
+            dropdown.style.display = 'none';
+            dropdown.removeAttribute('data-browser-occluder');
+        }
+    }
+
     function mountThemeSelector() {
-        const toolbar = document.querySelector('[data-testid="pane-titlebar-toolbar"]');
-        if (!toolbar || !document.body) return;
+        const toolbar = findActiveToolbar();
+        const mountTarget = resolveToolbarMountTarget(toolbar);
+        if (!toolbar || !mountTarget || !document.body) return;
 
         const existing = document.getElementById('antigravity-theme-selector');
         if (existing) {
-            if (toolbar.contains(existing)) return;
+            if (mountTarget.contains(existing)) return;
             existing.remove();
         }
 
@@ -847,7 +916,8 @@
 
         const container = document.createElement('div');
         container.id = 'antigravity-theme-selector';
-        container.style.cssText = 'position: relative; display: inline-flex; align-items: center; margin-right: 8px; flex: 0 0 auto; user-select: none; z-index: 10000;';
+        container.style.cssText = 'position: relative; display: inline-flex; align-items: center; margin-right: 4px; flex: 0 0 auto; user-select: none; pointer-events: auto; z-index: 10000;';
+        applyNoDragStyle(container);
 
         const btn = document.createElement('button');
         btn.id = 'antigravity-theme-btn';
@@ -879,7 +949,9 @@
             white-space: nowrap;
             flex: 0 0 auto;
             user-select: none;
+            pointer-events: auto;
         `;
+        applyNoDragStyle(btn);
 
         btn.innerHTML = `
             <span id="antigravity-theme-icon" style="display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px; flex-shrink: 0; line-height: 1;">${renderThemeIcon(currentTheme.icon, 'btn')}</span>
@@ -933,8 +1005,11 @@
             max-height: 280px;
             overflow-y: auto;
             scrollbar-width: thin;
+            pointer-events: auto;
             z-index: 9999999;
         `;
+        dropdown.removeAttribute('data-browser-occluder');
+        applyNoDragStyle(dropdown);
         dropdown.innerHTML = '';
 
         THEMES.forEach(t => {
@@ -956,7 +1031,9 @@
                 font-weight: ${isCurrent ? '600' : 'normal'};
                 background: ${isCurrent ? 'rgba(66, 133, 244, 0.12)' : 'transparent'};
                 box-sizing: border-box;
+                pointer-events: auto;
             `;
+            applyNoDragStyle(item);
             item.innerHTML = `
                 <span style="display: inline-flex; align-items: center; gap: 7px; width: 100%;">
                     <span style="display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px; flex-shrink: 0; line-height: 1;">${renderThemeIcon(t.icon, 'dd-' + t.id)}</span>
@@ -978,32 +1055,19 @@
                     : 'transparent';
             };
             item.onclick = (e) => {
+                e.preventDefault();
                 e.stopPropagation();
                 applyTheme(t.id);
-                dropdown.style.display = 'none';
+                setDropdownOpenState(dropdown, false);
             };
             dropdown.appendChild(item);
         });
 
-        function updateDropdownPosition() {
-            const rect = btn.getBoundingClientRect();
-            dropdown.style.top = `${rect.bottom + 6}px`;
-            dropdown.style.left = `${rect.left}px`;
-            dropdown.style.right = 'auto';
-            dropdown.style.width = `${rect.width}px`;
-            dropdown.style.minWidth = 'unset';
-            dropdown.style.boxSizing = 'border-box';
-        }
-
         btn.onclick = (e) => {
+            e.preventDefault();
             e.stopPropagation();
             const isOpen = dropdown.style.display === 'block';
-            if (!isOpen) {
-                updateDropdownPosition();
-                dropdown.style.display = 'block';
-            } else {
-                dropdown.style.display = 'none';
-            }
+            setDropdownOpenState(dropdown, !isOpen, btn);
         };
 
         if (!window.__antigravityThemeListenersAttached) {
@@ -1012,25 +1076,25 @@
                 const dd = document.getElementById('antigravity-theme-dropdown');
                 const b = document.getElementById('antigravity-theme-btn');
                 if (dd && b && !b.contains(e.target) && !dd.contains(e.target)) {
-                    dd.style.display = 'none';
+                    setDropdownOpenState(dd, false);
                 }
             });
 
             document.addEventListener('keydown', (e) => {
                 if (e.key === 'Escape') {
                     const dd = document.getElementById('antigravity-theme-dropdown');
-                    if (dd) dd.style.display = 'none';
+                    if (dd) setDropdownOpenState(dd, false);
                 }
             });
 
             window.addEventListener('resize', () => {
                 const dd = document.getElementById('antigravity-theme-dropdown');
-                if (dd) dd.style.display = 'none';
+                if (dd) setDropdownOpenState(dd, false);
             });
         }
 
         container.appendChild(btn);
-        toolbar.insertBefore(container, toolbar.firstChild);
+        mountTarget.insertBefore(container, mountTarget.firstChild);
         updateSelectorUI(currentId);
         enforceTitleBarColor(true);
     }
@@ -1102,8 +1166,9 @@
                 mountThemeSelector();
                 return;
             }
-            if (!document.getElementById('antigravity-theme-selector') &&
-                document.querySelector('[data-testid="pane-titlebar-toolbar"]')) {
+            const currentSelector = document.getElementById('antigravity-theme-selector');
+            const target = resolveToolbarMountTarget(findActiveToolbar());
+            if (target && (!currentSelector || !target.contains(currentSelector))) {
                 mountThemeSelector();
             }
         } catch (e) {}

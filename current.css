@@ -154,3 +154,16 @@ html[data-ag-custom-theme][data-aux-pane-maximized="true"] .agy-sheet > div.rela
   visibility: hidden !important;
   pointer-events: none !important;
 }
+
+/* macOS 无边框标题栏交互守护：确保顶栏主题切换器与下拉菜单不被 -webkit-app-region: drag 拦截点击 */
+#antigravity-theme-selector,
+#antigravity-theme-selector *,
+#antigravity-theme-btn,
+#antigravity-theme-btn *,
+#antigravity-theme-dropdown,
+#antigravity-theme-dropdown *,
+.antigravity-theme-item {
+  -webkit-app-region: no-drag !important;
+  app-region: no-drag !important;
+  pointer-events: auto !important;
+}
