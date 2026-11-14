@@ -197,9 +197,34 @@ html[data-ag-custom-theme][data-aux-pane-maximized="true"] .agy-sheet > div.rela
   border-color: transparent !important;
   box-shadow: none !important;
 }
-#antigravity-theme-btn[data-theme-mode="dark"]:hover,
-#antigravity-theme-btn[data-theme-mode="dark"][aria-expanded="true"] {
+#antigravity-theme-btn[aria-expanded="true"] {
+  background: rgba(255, 255, 255, 0.66) !important;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 22%, transparent) !important;
+}
+#antigravity-theme-btn[data-theme-mode="dark"]:hover {
   background: rgba(255, 255, 255, 0.10) !important;
+}
+#antigravity-theme-btn[data-theme-mode="dark"][aria-expanded="true"] {
+  background: color-mix(in srgb, var(--primary) 20%, transparent) !important;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 28%, transparent) !important;
+}
+
+/* 右上角工具栏原生展开/激活图标与悬停态（参考左侧会话列表选中高亮风格） */
+html[data-ag-custom-theme] [data-testid="pane-titlebar-toolbar"] button:not(#antigravity-theme-btn):not([data-testid^="open-editor-"]):not([data-testid="install-editor"]):not([data-testid="editor-loading"]):hover {
+  background-color: rgba(255, 255, 255, 0.45) !important;
+}
+html[data-ag-custom-theme]:is([data-ag-color-scheme="dark"], .dark, :has(> body.dark), .theme-dark, .dark-theme) [data-testid="pane-titlebar-toolbar"] button:not(#antigravity-theme-btn):not([data-testid^="open-editor-"]):not([data-testid="install-editor"]):not([data-testid="editor-loading"]):hover {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+html[data-ag-custom-theme] [data-testid="pane-titlebar-toolbar"] button:is([aria-expanded="true"], [data-state="open"], .bg-secondary, [data-testid="toggle-overview-panel"]:not(.bg-transparent)):not(#antigravity-theme-btn):not([data-testid^="open-editor-"]):not([data-testid="install-editor"]):not([data-testid="editor-loading"]) {
+  background-color: rgba(255, 255, 255, 0.66) !important;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 22%, transparent) !important;
+  color: var(--foreground) !important;
+}
+html[data-ag-custom-theme]:is([data-ag-color-scheme="dark"], .dark, :has(> body.dark), .theme-dark, .dark-theme) [data-testid="pane-titlebar-toolbar"] button:is([aria-expanded="true"], [data-state="open"], .bg-secondary, [data-testid="toggle-overview-panel"]:not(.bg-transparent)):not(#antigravity-theme-btn):not([data-testid^="open-editor-"]):not([data-testid="install-editor"]):not([data-testid="editor-loading"]) {
+  background-color: color-mix(in srgb, var(--primary) 20%, transparent) !important;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 28%, transparent) !important;
+  color: var(--foreground) !important;
 }
 
 /* 修复新版 Antigravity 顶栏最右侧 Toggle Side Panel 容器残留的原生 --shell-canvas / --shell 灰底补丁
@@ -407,17 +432,52 @@ html[data-ag-custom-theme] :is(bdi.context-scope-mention, [data-markdown-root] .
   background-color: color-mix(in srgb, var(--primary) 18%, transparent) !important;
   border-color: color-mix(in srgb, var(--primary) 48%, transparent) !important;
 }
-html[data-ag-custom-theme] :is(.rounded-lg, .rounded-xl):is(.border, [class*="border-border"]):is(.bg-card, .bg-muted, [class*="bg-muted/"]):not(.bg-sidebar *):not(.settings-modal-container *):not([data-testid="media-modal"] *):not([data-base-ui-portal] *):not(.monaco-editor *):not(.xterm *):not(#antigravity-theme-dropdown):not(pre > div) {
+html[data-ag-custom-theme] :is(.rounded-lg, .rounded-xl):is(.border, [class*="border-border"]):is(.bg-card, .bg-muted, [class*="bg-muted/"]):not(.bg-sidebar *):not(.settings-modal-container *):not([data-testid="media-modal"] *):not([data-base-ui-portal] *):not(.monaco-editor *):not(.xterm *):not(#antigravity-theme-dropdown):not(pre > div):not([data-testid="artifact-card"]):not(.artifact-card) {
   background-color: rgba(255, 255, 255, 0.56) !important;
   border-color: rgba(15, 23, 42, 0.10) !important;
 }
-html[data-ag-custom-theme]:is(.dark, :has(> body.dark), .theme-dark, .dark-theme) :is(.rounded-lg, .rounded-xl):is(.border, [class*="border-border"]):is(.bg-card, .bg-muted, [class*="bg-muted/"]):not(.bg-sidebar *):not(.settings-modal-container *):not([data-testid="media-modal"] *):not([data-base-ui-portal] *):not(.monaco-editor *):not(.xterm *):not(#antigravity-theme-dropdown):not(pre > div) {
+html[data-ag-custom-theme]:is(.dark, :has(> body.dark), .theme-dark, .dark-theme) :is(.rounded-lg, .rounded-xl):is(.border, [class*="border-border"]):is(.bg-card, .bg-muted, [class*="bg-muted/"]):not(.bg-sidebar *):not(.settings-modal-container *):not([data-testid="media-modal"] *):not([data-base-ui-portal] *):not(.monaco-editor *):not(.xterm *):not(#antigravity-theme-dropdown):not(pre > div):not([data-testid="artifact-card"]):not(.artifact-card) {
   background-color: rgba(15, 23, 42, 0.36) !important;
   border-color: rgba(255, 255, 255, 0.11) !important;
 }
-html[data-ag-custom-theme] :is(button, a, [role="button"], [tabindex]:not([tabindex="-1"])):is([class*="hover:bg-secondary"], [class*="hover:bg-muted"]):not(.bg-sidebar *):not(.settings-modal-container *):not([data-testid="media-modal"] *):not([data-base-ui-portal] *):not(#antigravity-theme-selector *):not(#antigravity-theme-dropdown *):hover {
+html[data-ag-custom-theme] :is(button, a, [role="button"], .cursor-pointer, [tabindex]:not([tabindex="-1"])):is([class*="hover:bg-secondary"], [class*="hover:bg-muted"]):not(.bg-sidebar *):not(.settings-modal-container *):not([data-testid="media-modal"] *):not([data-base-ui-portal] *):not(#antigravity-theme-selector *):not(#antigravity-theme-dropdown *):hover {
   background-color: rgba(15, 23, 42, 0.06) !important;
 }
-html[data-ag-custom-theme]:is(.dark, :has(> body.dark), .theme-dark, .dark-theme) :is(button, a, [role="button"], [tabindex]:not([tabindex="-1"])):is([class*="hover:bg-secondary"], [class*="hover:bg-muted"]):not(.bg-sidebar *):not(.settings-modal-container *):not([data-testid="media-modal"] *):not([data-base-ui-portal] *):not(#antigravity-theme-selector *):not(#antigravity-theme-dropdown *):hover {
+html[data-ag-custom-theme]:is(.dark, :has(> body.dark), .theme-dark, .dark-theme) :is(button, a, [role="button"], .cursor-pointer, [tabindex]:not([tabindex="-1"])):is([class*="hover:bg-secondary"], [class*="hover:bg-muted"]):not(.bg-sidebar *):not(.settings-modal-container *):not([data-testid="media-modal"] *):not([data-base-ui-portal] *):not(#antigravity-theme-selector *):not(#antigravity-theme-dropdown *):hover {
   background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* 生成文档 / 变更文件汇总卡片（Walkthrough、changed-files-card）静止底面与鼠标悬停反馈 */
+html[data-ag-custom-theme] :is([data-testid="artifact-card"], .artifact-card, [data-testid="bubble-artifact-card"], [data-testid="changed-files-card-header"]):not(.settings-modal-container *):not([data-testid="media-modal"] *) {
+  background-color: rgba(255, 255, 255, 0.48) !important;
+  border-color: rgba(15, 23, 42, 0.10) !important;
+  transition: background-color 0.15s ease, border-color 0.15s ease !important;
+}
+html[data-ag-custom-theme]:is([data-ag-color-scheme="dark"], .dark, :has(> body.dark), .theme-dark, .dark-theme) :is([data-testid="artifact-card"], .artifact-card, [data-testid="bubble-artifact-card"], [data-testid="changed-files-card-header"]):not(.settings-modal-container *):not([data-testid="media-modal"] *) {
+  background-color: rgba(15, 23, 42, 0.30) !important;
+  border-color: rgba(255, 255, 255, 0.11) !important;
+}
+html[data-ag-custom-theme] :is([data-testid="artifact-card"], .artifact-card, [data-testid="bubble-artifact-card"], [data-testid="changed-files-card-header"], [data-testid="changed-files-card"] .cursor-pointer, [data-testid="changed-files-card"] [class*="hover:bg-"]):not(.settings-modal-container *):not([data-testid="media-modal"] *):hover {
+  background-color: rgba(255, 255, 255, 0.78) !important;
+  border-color: color-mix(in srgb, var(--primary) 34%, rgba(15, 23, 42, 0.14)) !important;
+}
+html[data-ag-custom-theme]:is([data-ag-color-scheme="dark"], .dark, :has(> body.dark), .theme-dark, .dark-theme) :is([data-testid="artifact-card"], .artifact-card, [data-testid="bubble-artifact-card"], [data-testid="changed-files-card-header"], [data-testid="changed-files-card"] .cursor-pointer, [data-testid="changed-files-card"] [class*="hover:bg-"]):not(.settings-modal-container *):not([data-testid="media-modal"] *):hover {
+  background-color: color-mix(in srgb, var(--primary) 16%, rgba(15, 23, 42, 0.46)) !important;
+  border-color: color-mix(in srgb, var(--primary) 38%, rgba(255, 255, 255, 0.14)) !important;
+}
+html[data-ag-custom-theme] [data-testid="changed-files-card-review"] {
+  background-color: rgba(255, 255, 255, 0.64) !important;
+  border-color: rgba(15, 23, 42, 0.14) !important;
+}
+html[data-ag-custom-theme]:is([data-ag-color-scheme="dark"], .dark, :has(> body.dark), .theme-dark, .dark-theme) [data-testid="changed-files-card-review"] {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+}
+html[data-ag-custom-theme] [data-testid="changed-files-card-review"]:hover {
+  background-color: rgba(255, 255, 255, 0.92) !important;
+  border-color: color-mix(in srgb, var(--primary) 42%, rgba(15, 23, 42, 0.16)) !important;
+}
+html[data-ag-custom-theme]:is([data-ag-color-scheme="dark"], .dark, :has(> body.dark), .theme-dark, .dark-theme) [data-testid="changed-files-card-review"]:hover {
+  background-color: color-mix(in srgb, var(--primary) 24%, rgba(255, 255, 255, 0.10)) !important;
+  border-color: color-mix(in srgb, var(--primary) 48%, rgba(255, 255, 255, 0.18)) !important;
 }
