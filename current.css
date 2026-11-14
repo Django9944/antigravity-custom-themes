@@ -1,4 +1,6 @@
-/* current.css 由 current.js 动态管理主题样式，此处只保留主题无关的通用避让规则。
+/* Antigravity Custom Themes - Companion Stylesheet
+   Based on MCRYII/antigravity-custom-themes (Copyright (c) 2026 MCRYII), licensed under the MIT License.
+   current.css 由 current.js 动态管理主题样式，此处只保留主题无关的通用避让规则。
    【看图/图表模态顶部居中悬浮胶囊坞 + 底部缩放胶囊守护】
    1. 看图模态保持全屏铺满（top: 0 !important），消除顶部割裂空白条。
    2. 控制栏重构为顶部居中悬浮毛玻璃胶囊坞：与底部原生图片缩放条 1:1 双胶囊对称呼应。

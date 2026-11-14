@@ -1,4 +1,6 @@
 // Antigravity Custom Theme Engine & Companion Script
+// Based on MCRYII/antigravity-custom-themes (Copyright (c) 2026 MCRYII), licensed under the MIT License.
+// macOS Adaptation & Cross-Platform Surface Sync (Copyright (c) 2026 Django9944), licensed under the MIT License.
 // 自动注入顶栏主题胶囊切换器 + 下拉菜单选择（深浅自适应交由 Antigravity 宿主原生控制）
 (() => {
     'use strict';

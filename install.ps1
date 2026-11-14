@@ -1,5 +1,6 @@
 ﻿# =====================================================================
 #  Antigravity Custom Themes - One-Click Installer (Windows)
+#  Based on MCRYII/antigravity-custom-themes (Copyright (c) 2026 MCRYII), licensed under the MIT License.
 #  1) 备份 app.asar  2) 注入跨平台主题加载钩子（幂等）  3) 分发主题文件
 #  用法:  右键"使用 PowerShell 运行" 或 双击 install.bat
 #  卸载:  powershell -File install.ps1 -Uninstall

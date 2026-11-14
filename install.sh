@@ -2,6 +2,8 @@
 # =====================================================================
 #  Antigravity Custom Themes - macOS One-Click Installer & Manager
 #  Version: v2.3.2-mac
+#  Based on MCRYII/antigravity-custom-themes (Copyright (c) 2026 MCRYII), licensed under the MIT License.
+#  macOS Adaptation & Zero-Dependency ASAR Engine (Copyright (c) 2026 Django9944), licensed under the MIT License.
 #  功能:
 #    1) 自动定位 Antigravity.app (/Applications, ~/Applications, Spotlight)
 #    2) 原厂备份与逆向剥离自愈 (~/Library/Application Support/Antigravity/custom-theme-backup/app.asar.stock)

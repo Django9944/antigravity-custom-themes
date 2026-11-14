@@ -106,6 +106,7 @@ antigravity-custom-themes/
 ├── install.bat         # Windows 双击安装入口
 ├── uninstall.bat       # Windows 双击卸载入口
 ├── 检查更新.bat         # Windows 双击检查更新入口
+├── LICENSE             # MIT 开源许可证（保留上游原作者与 macOS 适配版双重署名）
 └── README.md           # 项目说明文档
 ```
 
@@ -122,6 +123,19 @@ antigravity-custom-themes/
 
 ---
 
+## ⚖️ 免责声明、商标声明与开源许可 (Legal, Trademarks & License)
+
+1. **开源许可与衍生声明 (MIT License & Attribution)**：
+   - 本项目基于 [MCRYII/antigravity-custom-themes](https://github.com/MCRYII/antigravity-custom-themes)（`Copyright (c) 2026 MCRYII`）在 **MIT License** 授权下进行衍生开发（新增 macOS 免重签 ASAR 注入引擎、`wcvBrowser.setThemeColor` 原生窗口底色同步与跨平台脚本），并同样以 [MIT License](./LICENSE) 开源发布。
+2. **非官方关联与商标声明 (Non-Affiliation & Trademarks)**：
+   - 本项目为独立的第三方开源社区项目，**与 Google LLC、Google DeepMind 或 Google Antigravity 官方团队无任何隶属、合作、授权或背书关系**。
+   - 文中提及的 **Google**、**Antigravity**、**Gemini**、**macOS**、**Apple**、**Windows**、**Microsoft** 及其他相关产品名称与商标，均归其各自合法所有者所有。此处引用仅作兼容性与适配对象说明（Nominative Fair Use）。
+3. **无专有二进制分发与风险自担声明 (No Proprietary Binaries & As-Is Warranty)**：
+   - 本仓库**仅包含纯文本样式表（`current.css`）、前端主题脚本（`current.js`）与本地安装脚本（`install.sh` / `install.ps1`）**，**绝不包含或分发任何 Google Antigravity 官方客户端专有代码、反编译源码或二进制包（如 `app.asar`）**。
+   - 所有补丁注入操作均在用户本机环境动态执行，并配备原厂备份（`app.asar.stock`）与字节级无损还原机制。本软件按“原样（AS IS）”提供，使用本项目修改本地客户端所产生的任何风险由用户自行承担。
+
+---
+
 ## 🙏 致谢
 
-- 原项目作者：[MCRYII/antigravity-custom-themes](https://github.com/MCRYII/antigravity-custom-themes)
+- 原项目作者与主题设计：[MCRYII/antigravity-custom-themes](https://github.com/MCRYII/antigravity-custom-themes)
