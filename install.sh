@@ -318,29 +318,31 @@ const LEGACY_MARKER = 'custom-theme injection hook';
 const HOOK_BLOCK = `
 /* === Antigravity Custom Theme Hook v1 === */
 try {
+    const path_ = require('path');
+    const fs_ = require('fs');
     const _ctCandidates = [
-        path_.join(process.resourcesPath, 'custom-theme'),
-        path_.join(electron_1.app.getPath('userData'), 'custom-theme'),
+        path_.join(process.resourcesPath || '', 'custom-theme'),
+        (typeof electron_1 !== 'undefined' && electron_1.app && typeof electron_1.app.getPath === 'function')
+            ? path_.join(electron_1.app.getPath('userData'), 'custom-theme') : '',
         path_.join(process.env.HOME || '', 'Library', 'Application Support', 'Antigravity', 'custom-theme'),
         path_.join(process.env.APPDATA || '', 'Antigravity', 'custom-theme')
-    ];
-    let _ctDir = _ctCandidates[0];
-    for (const _c of _ctCandidates) {
-        if (_c && fs.existsSync(path_.join(_c, 'current.css'))) { _ctDir = _c; break; }
-    }
-    const _ctCssPath = path_.join(_ctDir, 'current.css');
-    const _ctJsPath = path_.join(_ctDir, 'current.js');
+    ].filter(Boolean);
+    const _ctRead = (name) => {
+        for (const _d of _ctCandidates) {
+            try {
+                const _f = path_.join(_d, name);
+                if (fs_.existsSync(_f)) return fs_.readFileSync(_f, 'utf8');
+            } catch (e) {}
+        }
+        return null;
+    };
     const _ctInject = () => {
         try {
-            if (win.isDestroyed() || win.webContents.isDestroyed()) return;
-            if (fs.existsSync(_ctCssPath)) {
-                const _css = fs.readFileSync(_ctCssPath, 'utf8');
-                if (_css) win.webContents.insertCSS(_css).catch(() => {});
-            }
-            if (fs.existsSync(_ctJsPath)) {
-                const _js = fs.readFileSync(_ctJsPath, 'utf8');
-                if (_js) win.webContents.executeJavaScript(_js).catch(() => {});
-            }
+            if (win.isDestroyed?.() || win.webContents?.isDestroyed?.()) return;
+            const _css = _ctRead('current.css');
+            if (_css && _css.trim()) win.webContents.insertCSS(_css).catch(() => {});
+            const _js = _ctRead('current.js');
+            if (_js && _js.trim()) win.webContents.executeJavaScript(_js, true).catch(() => {});
         } catch (e) {}
     };
     win.webContents.on('dom-ready', _ctInject);
@@ -504,7 +506,7 @@ try {
     if (action === 'verify-patched') {
         const integrityOk = verifyNodeIntegrity(parsed.buf, parsed.dataStart, parsed.utilsNode);
         const boundsOk = verifyAllBounds(parsed.buf, parsed.dataStart, parsed.tree);
-        const hasCandidates = parsed.content.includes('_ctCandidates') && parsed.content.includes("app.getPath('userData')");
+        const hasCandidates = parsed.content.includes('_ctCandidates') && parsed.content.includes("require('path')") && parsed.content.includes("app.getPath('userData')");
         if (hasV1Hook && hasAnchor && hasCandidates && integrityOk && boundsOk) {
             console.log('VERIFY_OK');
             process.exit(0);
@@ -579,29 +581,31 @@ LEGACY_MARKER = "custom-theme injection hook"
 HOOK_BLOCK = """
 /* === Antigravity Custom Theme Hook v1 === */
 try {
+    const path_ = require('path');
+    const fs_ = require('fs');
     const _ctCandidates = [
-        path_.join(process.resourcesPath, 'custom-theme'),
-        path_.join(electron_1.app.getPath('userData'), 'custom-theme'),
+        path_.join(process.resourcesPath || '', 'custom-theme'),
+        (typeof electron_1 !== 'undefined' && electron_1.app && typeof electron_1.app.getPath === 'function')
+            ? path_.join(electron_1.app.getPath('userData'), 'custom-theme') : '',
         path_.join(process.env.HOME || '', 'Library', 'Application Support', 'Antigravity', 'custom-theme'),
         path_.join(process.env.APPDATA || '', 'Antigravity', 'custom-theme')
-    ];
-    let _ctDir = _ctCandidates[0];
-    for (const _c of _ctCandidates) {
-        if (_c && fs.existsSync(path_.join(_c, 'current.css'))) { _ctDir = _c; break; }
-    }
-    const _ctCssPath = path_.join(_ctDir, 'current.css');
-    const _ctJsPath = path_.join(_ctDir, 'current.js');
+    ].filter(Boolean);
+    const _ctRead = (name) => {
+        for (const _d of _ctCandidates) {
+            try {
+                const _f = path_.join(_d, name);
+                if (fs_.existsSync(_f)) return fs_.readFileSync(_f, 'utf8');
+            } catch (e) {}
+        }
+        return null;
+    };
     const _ctInject = () => {
         try {
-            if (win.isDestroyed() || win.webContents.isDestroyed()) return;
-            if (fs.existsSync(_ctCssPath)) {
-                const _css = fs.readFileSync(_ctCssPath, 'utf8');
-                if (_css) win.webContents.insertCSS(_css).catch(() => {});
-            }
-            if (fs.existsSync(_ctJsPath)) {
-                const _js = fs.readFileSync(_ctJsPath, 'utf8');
-                if (_js) win.webContents.executeJavaScript(_js).catch(() => {});
-            }
+            if (win.isDestroyed?.() || win.webContents?.isDestroyed?.()) return;
+            const _css = _ctRead('current.css');
+            if (_css && _css.trim()) win.webContents.insertCSS(_css).catch(() => {});
+            const _js = _ctRead('current.js');
+            if (_js && _js.trim()) win.webContents.executeJavaScript(_js, true).catch(() => {});
         } catch (e) {}
     };
     win.webContents.on('dom-ready', _ctInject);
