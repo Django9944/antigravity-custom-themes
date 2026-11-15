@@ -1,5 +1,7 @@
 # Antigravity Custom Themes (macOS & Windows 跨平台版)
 
+[English](./README_EN.md) | 简体中文
+
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-blue?style=flat-square)](https://github.com/Django9944/antigravity-custom-themes)
 [![Version](https://img.shields.io/badge/Release-v2.3.2--mac-60A5FA?style=flat-square)](https://github.com/Django9944/antigravity-custom-themes/releases)
 [![macOS Hook](https://img.shields.io/badge/macOS-Zero--Resign%20%26%20TCC%20Safe-10B981?style=flat-square)](#-核心特性与深度打磨)
