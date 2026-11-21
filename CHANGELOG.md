@@ -1,0 +1,46 @@
+# Changelog
+
+All notable changes to **Antigravity Custom Themes** are documented in this file.
+
+## [v2.4.0] - 2026-11-21
+
+### ✨ 新增特性 (Features)
+- **一键校验在线自更新 (`--update` / `-Update` & `core/updater.js`)**：
+  - 自动从本仓库 GitHub Releases 下载对应平台发行包（`macos.zip` / `windows.zip`）并严格比对 `SHA256SUMS.txt` 校验完整性。
+  - **智能分级热更新**：若 `hookVersion` 未发生变化且当前 `app.asar` 已处于 `PATCHED_V1` 状态，直接热覆盖双目录 `current.css` 与 `current.js`，无需关闭 Antigravity、无需重写 `app.asar`，按 `Cmd + R` / `Ctrl + R` 秒级生效；否则自动同步并重注入。
+  - `检查更新.command` / `检查更新.bat` 发现新版本后支持直接回车一键完成自动下载与升级。
+- **IDE 内置新版本角标提醒 (`current.js`)**：
+  - 每 24 小时静默只读检查一次 GitHub 最新 Release（本地 `localStorage` 缓存，离线静默忽略，不远程执行任何代码）。
+  - 发现新版本时在顶栏主题切换按钮右上角展示蓝点提示，并在下拉面板底部提供可点击的版本更新入口。
+- **宿主 Antigravity 升级后自动恢复主题 (`auto-heal`)**：
+  - **macOS (`--enable-auto-heal` / `--disable-auto-heal`)**：通过 `LaunchAgent` (`WatchPaths`) 监听 `app.asar` 变动，宿主更新覆盖 `app.asar` 后自动检测锚点并静默恢复注入。
+  - **Windows (`-EnableAutoHeal` / `-DisableAutoHeal`)**：注册用户级登录计划任务（无需管理员权限），登录时自动检测并静默恢复被宿主升级覆盖的主题钩子。
+- **Antigravity 官方版本云端监控 (`antigravity-watch.yml` & `scripts/check-antigravity-upstream.mjs`)**：
+  - 每日云端自动轮询 Google Antigravity 官方自动更新通道（`latest-x64-win.yml` / `latest-arm64-mac.yml` / `latest-x64-mac.yml`）。
+  - 检测到官方新构建时，在云端自动下载官方 `Antigravity.zip` 提取真实 `app.asar` 执行完整注入与字节级剥离回归测试，并自动维护兼容性看板 Issue。
+
+---
+
+## [v2.3.3] - 2026-11-21
+
+### ✨ 新增特性与架构重构 (Features & Refactoring)
+- **兼容 Antigravity 2.34+ 注入锚点 (`83e6f5b`)**：
+  - 新增对 Antigravity 2.34+ `void loadHubWindowUrl(win, url, { skipBootstrapMint });` 注入锚点及兜底正则的兼容支持，同时向下兼容旧版 `void win.loadURL(url);`。
+- **跨平台单一事实源与共享补丁引擎 (`manifest.json` & `core/asar-patcher.js`)**：
+  - 抽离 `manifest.json` 统一管理版本号、仓库地址、注入锚点列表与载荷配置。
+  - 将 macOS 与 Windows 的 ASAR 解析、注入、逆向剥离、SHA256 整包及 4MB 分块校验统一收拢至零外部依赖的 `core/asar-patcher.js`（直接复用 Antigravity 内置 Electron Node 运行时 `ELECTRON_RUN_AS_NODE=1`）。
+  - 新增 `--doctor` / `-Doctor` 只读诊断模式与本机兼容性探针 `scripts/check-host-compat.mjs`。
+- **三平台 CI 与自动化发布流水线 (`ci.yml` & `release.yml`)**：
+  - 新增 `macos-latest`、`ubuntu-latest`、`windows-latest` 全量合成 ASAR 生命周期（注入、幂等、剥离字节级一致性）自动化测试。
+
+### 🐛 问题修复 (Bug Fixes)
+- **Windows 跨 Shell 哈希兼容 (`3b82a89`)**：使用纯 .NET `SHA256` 替代 `Get-FileHash`，修复从 PowerShell 7 (`pwsh`) 环境调用 Windows PowerShell 5.1 时模块加载失败的问题。
+- **更新源修正**：将 `install.sh` 与 `install.ps1` 的更新检测源从原上游切换至 `Django9944/antigravity-custom-themes`。
+
+---
+
+## [v2.3.2-mac] - 2026-11-15
+
+### ✨ 核心特性 (Highlights)
+- **macOS 免重签 ASAR 注入 (`install.sh` / `install.command`)**：仅更新 `app.asar` 头部与分块哈希，保持 `Info.plist` 与 Mach-O 原始代码签名不动，保留 macOS TCC 权限。
+- **原生标题栏同步与 12 款极光毛玻璃主题**：6 浅 + 6 深主题（`gemini`、`sky`、`cyan`、`orange`、`red`、`purple`）+ `stock` 原厂重置，支持 `Cmd + R` / `Ctrl + R` 秒级热重载。

@@ -199,6 +199,14 @@ if [ "$MODE" = "check-update" ]; then
         echo ""
         ok "发现新版本：${REMOTE_TAG} （当前版本：${CURRENT_VERSION}）"
         printf "${C_GRAY}    发布时间：%s${C_RESET}\n" "$PUBLISHED_AT"
+        if [ -f "$UPDATER_SCRIPT" ] && command -v node >/dev/null 2>&1; then
+            SUMMARY_TEXT="$(node "$UPDATER_SCRIPT" check --platform macos 2>/dev/null | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')||'{}'); console.log((d.summary||[]).join('\n'));" 2>/dev/null || true)"
+            if [ -n "$SUMMARY_TEXT" ]; then
+                printf "\n${C_YELLOW}更新内容描述：${C_RESET}\n"
+                printf "${C_GRAY}%s${C_RESET}\n" "$SUMMARY_TEXT"
+            fi
+        fi
+        echo ""
         if [ "$NON_INTERACTIVE" -eq 0 ]; then
             read -r -p "是否立即自动下载校验并更新？(Y=自动更新 / B=仅打开浏览器 / N=取消) [默认 Y]: " OPEN_ANS || OPEN_ANS="Y"
             if [ -z "$OPEN_ANS" ] || [[ "$OPEN_ANS" =~ ^[Yy] ]]; then
@@ -655,6 +663,12 @@ if [ "$MODE" = "update" ]; then
     if [ "$HAS_UPDATE" != "1" ]; then
         ok "当前已是最新版本 (${CURRENT_VERSION})，无需更新。"
         exit 0
+    fi
+
+    SUMMARY_TEXT="$(printf '%s' "$CHECK_JSON" | env "${NODE_ENV_ARGS[@]}" "$NODE_BIN" -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); console.log((d.summary||[]).join('\n'));")"
+    if [ -n "$SUMMARY_TEXT" ]; then
+        printf "\n${C_YELLOW}本次版本更新描述 (${REMOTE_TAG})：${C_RESET}\n"
+        printf "${C_GRAY}%s${C_RESET}\n\n" "$SUMMARY_TEXT"
     fi
 
     info "发现新版本 ${REMOTE_TAG}，正在下载并校验 SHA256SUMS.txt..."

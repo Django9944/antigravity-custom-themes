@@ -90,6 +90,13 @@ jobs:
           (cd dist && sha256sum antigravity-custom-themes-${TAG}-*.zip > SHA256SUMS.txt)
           ls -lh dist/antigravity-custom-themes-${TAG}-*.zip dist/SHA256SUMS.txt
 
+      - name: Generate structured release notes
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          node scripts/generate-release-notes.mjs "$TAG" dist/SHA256SUMS.txt > dist/RELEASE_NOTES.md
+          cat dist/RELEASE_NOTES.md
+
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -102,7 +109,11 @@ jobs:
               "dist/antigravity-custom-themes-${TAG}-universal.zip" \
               "dist/SHA256SUMS.txt" \
               --clobber
-            gh release edit "$TAG" --draft=false --latest
+            gh release edit "$TAG" \
+              --title "Antigravity Custom Themes ${TAG}" \
+              --notes-file dist/RELEASE_NOTES.md \
+              --draft=false \
+              --latest
           else
             gh release create "$TAG" \
               "dist/antigravity-custom-themes-${TAG}-macos.zip" \
@@ -110,5 +121,6 @@ jobs:
               "dist/antigravity-custom-themes-${TAG}-universal.zip" \
               "dist/SHA256SUMS.txt" \
               --title "Antigravity Custom Themes ${TAG}" \
-              --generate-notes
+              --notes-file dist/RELEASE_NOTES.md \
+              --latest
           fi

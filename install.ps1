@@ -106,8 +106,8 @@ if ($CheckUpdate) {
             Write-Host "[!] 发现新版本：$remoteTag （当前版本：$CurrentVersion）" -ForegroundColor Green
             Write-Host "    发布时间：$publishedAt" -ForegroundColor Gray
             if ($release.body) {
-                Write-Host "`n更新摘要：" -ForegroundColor Yellow
-                $summary = ($release.body -split "`n" | Where-Object { $_ -match '^[-*#0-9]' } | Select-Object -First 5) -join "`n"
+                Write-Host "`n更新内容描述：" -ForegroundColor Yellow
+                $summary = ($release.body -split "`r?`n" | Where-Object { $_ -match '^(?:###\s+(?!🚀|🔒)|[-*]\s+|\d+\.\s+)' -and $_ -notmatch '^\*\*Full Changelog\*\*' } | Select-Object -First 8) -join "`n"
                 if ($summary) { Write-Host $summary -ForegroundColor Gray }
             }
             Write-Host ""
@@ -395,6 +395,12 @@ if ($Update) {
     if (-not $chkObj.hasUpdate) {
         Ok "当前已是最新版本 ($CurrentVersion)，无需更新。"
         exit 0
+    }
+
+    if ($chkObj.summary -and @($chkObj.summary).Count -gt 0) {
+        Write-Host "`n本次版本更新描述 ($($chkObj.remoteTag))：" -ForegroundColor Yellow
+        Write-Host ((@($chkObj.summary)) -join "`n") -ForegroundColor Gray
+        Write-Host ""
     }
 
     Info "发现新版本 $($chkObj.remoteTag)，正在下载并校验 SHA256SUMS.txt..."

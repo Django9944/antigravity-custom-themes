@@ -73,6 +73,27 @@ function verifyFileSha256(filePath, checksumsText, expectedFileName) {
     };
 }
 
+function extractReleaseSummary(bodyText, maxLines = 8) {
+    const lines = String(bodyText || '').split(/\r?\n/);
+    const picked = [];
+    let inStopSection = false;
+    for (const raw of lines) {
+        const line = raw.trim();
+        if (!line) continue;
+        if (/^###\s+🚀|^###\s+🔒|^<details>|^<\/details>|^<summary>/.test(line)) {
+            inStopSection = true;
+            continue;
+        }
+        if (/^##\s+Antigravity Custom Themes/i.test(line)) continue;
+        if (/^\*\*Full Changelog\*\*/i.test(line)) continue;
+        if (inStopSection) continue;
+        if (/^(?:###\s+|[-*]\s+|\d+\.\s+)/.test(line)) {
+            picked.push(line);
+            if (picked.length >= maxLines) break;
+        }
+    }
+    return picked;
+}
 function decideUpdateMode({ oldHookVersion, newHookVersion, asarState }) {
     const hookChanged = String(oldHookVersion || 'v1') !== String(newHookVersion || 'v1');
     if (!hookChanged && asarState === 'PATCHED_V1') {
@@ -202,7 +223,7 @@ async function runCli() {
             assetName: rel.assetName,
             assetUrl: rel.assetUrl,
             checksumUrl: rel.checksumUrl,
-            summary: rel.body.split(/\r?\n/).filter((l) => /^[-*#0-9]/.test(l.trim())).slice(0, 5)
+            summary: extractReleaseSummary(rel.body, 8)
         };
         console.log(JSON.stringify(out, null, 2));
         return;
@@ -304,6 +325,7 @@ if (require.main === module) {
         compareSemver,
         parseSha256Sums,
         verifyFileSha256,
-        decideUpdateMode
+        decideUpdateMode,
+        extractReleaseSummary
     };
 }

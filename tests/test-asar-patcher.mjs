@@ -10,6 +10,7 @@ import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { parseElectronUpdaterYaml, verifyAsarFile } from '../scripts/check-antigravity-upstream.mjs';
+import { extractChangelogSection, formatConventionalCommits } from '../scripts/generate-release-notes.mjs';
 
 const require = createRequire(import.meta.url);
 const __filename = fileURLToPath(import.meta.url);
@@ -139,11 +140,27 @@ try {
             path.join('core', 'asar-patcher.js'),
             path.join('core', 'updater.js'),
             path.join('scripts', 'check-host-compat.mjs'),
-            path.join('scripts', 'check-antigravity-upstream.mjs')
+            path.join('scripts', 'check-antigravity-upstream.mjs'),
+            path.join('scripts', 'generate-release-notes.mjs')
         ]) {
             const res = spawnSync(process.execPath, ['--check', path.join(ROOT, rel)], { encoding: 'utf8' });
             assert.equal(res.status, 0, `${rel} syntax check failed: ${res.stderr}`);
         }
+    });
+
+    test('CHANGELOG.md and scripts/generate-release-notes.mjs generate structured release descriptions', () => {
+        const manifest = JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'));
+        const changelog = fs.readFileSync(path.join(ROOT, 'CHANGELOG.md'), 'utf8');
+        const section = extractChangelogSection(changelog, manifest.version);
+        assert.ok(section.length > 50, `CHANGELOG.md must contain a detailed section for [${manifest.version}]`);
+
+        const formatted = formatConventionalCommits([
+            'a1b2c3d|feat(updater): add self-update with SHA256 verification',
+            'e4f5g6h|fix(installer): support Antigravity 2.34+ anchor'
+        ]);
+        assert.ok(formatted.includes('### ✨ 新增特性 (Features)'));
+        assert.ok(formatted.includes('**updater**: add self-update with SHA256 verification (`a1b2c3d`)'));
+        assert.ok(formatted.includes('### 🐛 问题修复 (Bug Fixes)'));
     });
 
     test('current.js THEME_PACK_VERSION matches manifest.json version', () => {
