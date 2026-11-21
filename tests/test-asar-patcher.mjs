@@ -9,6 +9,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { parseElectronUpdaterYaml, verifyAsarFile } from '../scripts/check-antigravity-upstream.mjs';
 
 const require = createRequire(import.meta.url);
 const __filename = fileURLToPath(import.meta.url);
@@ -122,7 +123,9 @@ try {
         const manifest = JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'));
         assert.match(manifest.version, /^v\d+\.\d+\.\d+/, 'version must be semver-like vX.Y.Z');
         assert.equal(manifest.repo, 'Django9944/antigravity-custom-themes');
-        assert.equal(manifest.upstreamRepo, 'MCRYII/antigravity-custom-themes');
+        assert.match(manifest.hostUpdaterUrl, /^https:\/\/antigravity-hub-auto-updater-/, 'hostUpdaterUrl must point to official Antigravity updater');
+        assert.match(manifest.verifiedHostVersion, /^\d+\.\d+\.\d+/, 'verifiedHostVersion must be defined');
+        assert.equal(manifest.upstreamRepo, undefined, 'MCRYII upstreamRepo should be removed');
         assert.ok(Array.isArray(manifest.anchors) && manifest.anchors.length >= 2);
         assert.ok(Array.isArray(manifest.payloads) && manifest.payloads.includes('current.css') && manifest.payloads.includes('current.js'));
         for (const p of manifest.payloads) {
@@ -130,8 +133,14 @@ try {
         }
     });
 
-    test('current.js, core/asar-patcher.js, and core/updater.js pass node --check', () => {
-        for (const rel of ['current.js', path.join('core', 'asar-patcher.js'), path.join('core', 'updater.js')]) {
+    test('current.js, core/asar-patcher.js, core/updater.js, and scripts pass node --check', () => {
+        for (const rel of [
+            'current.js',
+            path.join('core', 'asar-patcher.js'),
+            path.join('core', 'updater.js'),
+            path.join('scripts', 'check-host-compat.mjs'),
+            path.join('scripts', 'check-antigravity-upstream.mjs')
+        ]) {
             const res = spawnSync(process.execPath, ['--check', path.join(ROOT, rel)], { encoding: 'utf8' });
             assert.equal(res.status, 0, `${rel} syntax check failed: ${res.stderr}`);
         }
@@ -163,6 +172,35 @@ try {
         assert.equal(updater.decideUpdateMode({ oldHookVersion: 'v1', newHookVersion: 'v2', asarState: 'PATCHED_V1' }), 'full');
         assert.equal(updater.decideUpdateMode({ oldHookVersion: 'v1', newHookVersion: 'v1', asarState: 'CLEAN' }), 'full');
         assert.equal(updater.decideUpdateMode({ oldHookVersion: 'v1', newHookVersion: 'v1', asarState: 'PATCHED_LEGACY' }), 'full');
+    });
+
+    test('scripts/check-antigravity-upstream.mjs parses official Electron updater YAML and verifies ASAR', () => {
+        const sampleYaml = [
+            'version: 2.34.0',
+            'files:',
+            '  - url: https://storage.googleapis.com/antigravity-public/antigravity-hub/2.34.0-5887025308631040/darwin-arm/Antigravity.zip',
+            '    sha512: 4mY3QkbpWxuru5gPvJrabdr3tMH/mnQDtallcA5m6bZQ6g3AClqU5N6gryt0eml7mrLtm7Vkb+iIQdDRB3wCFw==',
+            '    size: 211599326',
+            'path: Antigravity.zip',
+            'sha512: 4mY3QkbpWxuru5gPvJrabdr3tMH/mnQDtallcA5m6bZQ6g3AClqU5N6gryt0eml7mrLtm7Vkb+iIQdDRB3wCFw=='
+        ].join('\n');
+        const parsed = parseElectronUpdaterYaml(sampleYaml);
+        assert.equal(parsed.version, '2.34.0');
+        assert.equal(parsed.buildId, '2.34.0-5887025308631040');
+        assert.equal(parsed.fileName, 'Antigravity.zip');
+        assert.equal(parsed.size, 211599326);
+
+        const okAsar = path.join(tmpDir, 'host-ok.asar');
+        fs.writeFileSync(okAsar, createSyntheticAsar('void loadHubWindowUrl(win, url, { skipBootstrapMint });\n'));
+        const okRes = verifyAsarFile(okAsar);
+        assert.equal(okRes.compatible, true);
+        assert.equal(okRes.byteExact, true);
+
+        const badAsar = path.join(tmpDir, 'host-bad.asar');
+        fs.writeFileSync(badAsar, createSyntheticAsar('void futureLoadWindowUrl(win, url);\n'));
+        const badRes = verifyAsarFile(badAsar);
+        assert.equal(badRes.compatible, false);
+        assert.ok(badRes.candidateHints.some((l) => l.includes('futureLoadWindowUrl')), 'should extract candidate anchor hints on failure');
     });
 
     test('current.css has balanced braces and theme scoping', () => {
