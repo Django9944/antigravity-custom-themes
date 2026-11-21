@@ -25,6 +25,17 @@ function Ok([string]$msg)   { Write-Host "[OK] $msg" -ForegroundColor Green }
 function Warn([string]$msg) { Write-Host "[!] $msg" -ForegroundColor Yellow }
 function Info([string]$msg) { Write-Host "[*] $msg" -ForegroundColor Cyan }
 
+function Get-Sha256Hex([string]$Path) {
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    $fs = [System.IO.File]::OpenRead($Path)
+    try {
+        return ([System.BitConverter]::ToString($sha.ComputeHash($fs))).Replace('-', '').ToLowerInvariant()
+    } finally {
+        $fs.Dispose()
+        $sha.Dispose()
+    }
+}
+
 if (-not (Test-Path -LiteralPath $ManifestPath)) {
     Die "缺少清单文件 manifest.json —— 请在完整的主题包目录内运行本脚本。"
 }
@@ -420,7 +431,7 @@ if ($Uninstall) {
             $tmpRestore = "$AsarPath.restore.tmp"
             try {
                 Copy-Item -LiteralPath $BackupPath -Destination $tmpRestore -Force
-                $expectedHash = (Get-FileHash -LiteralPath $BackupPath -Algorithm SHA256).Hash
+                $expectedHash = Get-Sha256Hex $BackupPath
                 $vClean = Invoke-AsarEngine -Runtime $Runtime -Action 'verify-clean' -TargetAsar $tmpRestore
                 if ($vClean.ExitCode -ne 0) {
                     throw "备份文件校验异常：$($vClean.Stderr)"
@@ -430,7 +441,7 @@ if ($Uninstall) {
                 } catch {
                     Move-Item -LiteralPath $tmpRestore -Destination $AsarPath -Force
                 }
-                $restoredHash = (Get-FileHash -LiteralPath $AsarPath -Algorithm SHA256).Hash
+                $restoredHash = Get-Sha256Hex $AsarPath
                 if ($restoredHash -ne $expectedHash) {
                     throw "还原后 app.asar 哈希校验失败"
                 }
@@ -493,8 +504,8 @@ $asarState = $inspectRes.Stdout
 # ---------- 安装流程：2) 原厂备份与自愈 ----------
 if ($asarState -eq 'CLEAN') {
     if (Test-Path -LiteralPath $BackupPath) {
-        $currentHash = (Get-FileHash -LiteralPath $AsarPath -Algorithm SHA256).Hash
-        $backupHash  = (Get-FileHash -LiteralPath $BackupPath -Algorithm SHA256).Hash
+        $currentHash = Get-Sha256Hex $AsarPath
+        $backupHash  = Get-Sha256Hex $BackupPath
         if ($currentHash -ne $backupHash) {
             Copy-Item -LiteralPath $AsarPath -Destination $BackupPath -Force
             Ok "检测到客户端版本已升级，已自动更新原生备份：app.asar.stock-backup"
