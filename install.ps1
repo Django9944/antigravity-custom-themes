@@ -10,7 +10,11 @@
 param(
     [switch]$Uninstall,
     [switch]$CheckUpdate,
+    [switch]$Update,
     [switch]$Doctor,
+    [switch]$EnableAutoHeal,
+    [switch]$DisableAutoHeal,
+    [switch]$AutoHeal,
     [string]$AppPath = '',
     [switch]$NonInteractive
 )
@@ -19,6 +23,8 @@ $ErrorActionPreference = 'Stop'
 $ScriptDir     = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ManifestPath  = Join-Path $ScriptDir 'manifest.json'
 $PatcherScript = Join-Path $ScriptDir 'core\asar-patcher.js'
+$UpdaterScript = Join-Path $ScriptDir 'core\updater.js'
+$AutoHealTaskName = 'AntigravityCustomThemes-AutoHeal'
 
 function Die([string]$msg)  { Write-Host "[X] $msg" -ForegroundColor Red; exit 1 }
 function Ok([string]$msg)   { Write-Host "[OK] $msg" -ForegroundColor Green }
@@ -106,8 +112,13 @@ if ($CheckUpdate) {
             }
             Write-Host ""
             if (-not $NonInteractive) {
-                $open = Read-Host "是否在浏览器中打开最新版本下载页面？(Y/N) [默认 Y]"
+                $open = Read-Host "是否立即自动下载校验并更新？(Y=自动更新 / B=仅打开浏览器 / N=取消) [默认 Y]"
                 if ($open -eq '' -or $open -match '^[Yy]') {
+                    $reArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $MyInvocation.MyCommand.Path, '-Update')
+                    if ($AppPath) { $reArgs += @('-AppPath', $AppPath) }
+                    & powershell.exe @reArgs
+                    exit $LASTEXITCODE
+                } elseif ($open -match '^[Bb]') {
                     Start-Process $htmlUrl
                     Ok "已调起默认浏览器打开发布页面。"
                 }
@@ -314,6 +325,17 @@ Ok "已定位客户端：$ResDir"
 
 $Runtime = Select-AsarRuntime -ResourcesDir $ResDir
 
+# ---------- 停用宿主升级自动恢复 (-DisableAutoHeal) ----------
+if ($DisableAutoHeal) {
+    $del = Invoke-ProcessCaptured -FilePath 'schtasks.exe' -Arguments @('/Delete', '/TN', $AutoHealTaskName, '/F')
+    if ($del.ExitCode -eq 0) {
+        Ok "已停用并删除计划任务 ($AutoHealTaskName)"
+    } else {
+        Ok "当前未启用宿主升级自动恢复计划任务。"
+    }
+    exit 0
+}
+
 # ---------- 只读诊断模式 (-Doctor) ----------
 if ($Doctor) {
     $appExe = Join-Path (Split-Path -Parent $ResDir) 'Antigravity.exe'
@@ -326,6 +348,95 @@ if ($Doctor) {
     if ($res.Stdout) { Write-Host $res.Stdout }
     if ($res.Stderr) { Write-Host $res.Stderr -ForegroundColor Yellow }
     exit $res.ExitCode
+}
+
+# ---------- 启用宿主升级自动恢复 (-EnableAutoHeal) ----------
+if ($EnableAutoHeal) {
+    $scriptPath = $MyInvocation.MyCommand.Path
+    $taskCmd = "powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$scriptPath`" -AutoHeal"
+    if ($AppPath) { $taskCmd += " -AppPath `"$AppPath`"" }
+    $crt = Invoke-ProcessCaptured -FilePath 'schtasks.exe' -Arguments @('/Create', '/F', '/SC', 'ONLOGON', '/TN', $AutoHealTaskName, '/TR', $taskCmd)
+    if ($crt.ExitCode -ne 0) {
+        Die "创建计划任务失败：$($crt.Stderr) $($crt.Stdout)"
+    }
+    Ok "已启用宿主升级自动恢复计划任务 ($AutoHealTaskName，用户登录时自动检测)"
+    Write-Host "    停用命令：powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1 -DisableAutoHeal" -ForegroundColor Gray
+    exit 0
+}
+
+# ---------- 静默自愈模式 (-AutoHeal) ----------
+if ($AutoHeal) {
+    $NonInteractive = $true
+    $ahCheck = Invoke-AsarEngine -Runtime $Runtime -Action 'inspect' -TargetAsar $AsarPath
+    if ($ahCheck.ExitCode -eq 0 -and $ahCheck.Stdout -eq 'PATCHED_V1') {
+        exit 0
+    }
+    if ($ahCheck.ExitCode -eq 2) {
+        Warn "检测到 Antigravity 已升级且注入锚点发生变化，已安全跳过自动恢复。请运行 install.ps1 -Update 更新主题包。"
+        exit 2
+    }
+    if ($ahCheck.ExitCode -ne 0) {
+        Die "自愈检测异常：$($ahCheck.Stderr)"
+    }
+    Info "检测到宿主升级覆盖了 app.asar ($($ahCheck.Stdout))，正在静默恢复主题注入..."
+}
+
+# ---------- 一键在线自动更新 (-Update) ----------
+if ($Update) {
+    if (-not (Test-Path -LiteralPath $UpdaterScript)) {
+        Die "缺少更新引擎 core\updater.js —— 请在完整的主题包目录内运行本脚本。"
+    }
+    Info "正在检查并拉取最新发行版 ($Repo)..."
+    $chk = Invoke-ProcessCaptured -FilePath $Runtime.Binary -Arguments @($UpdaterScript, 'check', '--platform', 'windows') -Environment $Runtime.Env
+    if ($chk.ExitCode -ne 0) {
+        Die "检查更新失败：$($chk.Stderr)"
+    }
+    $chkObj = $chk.Stdout | ConvertFrom-Json
+    if (-not $chkObj.hasUpdate) {
+        Ok "当前已是最新版本 ($CurrentVersion)，无需更新。"
+        exit 0
+    }
+
+    Info "发现新版本 $($chkObj.remoteTag)，正在下载并校验 SHA256SUMS.txt..."
+    $tmpUpdDir = Join-Path ([System.IO.Path]::GetTempPath()) ("ag-theme-update-" + [System.Guid]::NewGuid().ToString('N').Substring(0, 8))
+    try {
+        $dl = Invoke-ProcessCaptured -FilePath $Runtime.Binary -Arguments @($UpdaterScript, 'download', $tmpUpdDir, '--platform', 'windows') -Environment $Runtime.Env
+        if ($dl.ExitCode -ne 0) {
+            Die "下载或 SHA256 校验失败：$($dl.Stderr)"
+        }
+        $dlObj = $dl.Stdout | ConvertFrom-Json
+        if ($dlObj.checksumVerified) {
+            Ok "ZIP 完整性校验通过 (SHA256SUMS.txt)"
+        }
+
+        $curStateRes = Invoke-AsarEngine -Runtime $Runtime -Action 'inspect' -TargetAsar $AsarPath
+        $curState = if ($curStateRes.ExitCode -eq 0) { $curStateRes.Stdout } else { 'UNKNOWN' }
+
+        if ((-not $dlObj.hookChanged) -and ($curState -eq 'PATCHED_V1')) {
+            Info "Hook 无需变动，执行零中断热更新..."
+            $applyArgs = @($UpdaterScript, 'apply', [string]$dlObj.stagingDir, $ScriptDir) + $ThemeDirs
+            $ap = Invoke-ProcessCaptured -FilePath $Runtime.Binary -Arguments $applyArgs -Environment $Runtime.Env
+            if ($ap.ExitCode -ne 0) {
+                Die "热更新文件同步失败：$($ap.Stderr)"
+            }
+            Ok "热更新完成：$CurrentVersion -> $($dlObj.remoteTag)！在 Antigravity 窗口按 Ctrl + R 即可秒级生效。"
+            exit 0
+        } else {
+            Info "检测到需要重新注入 app.asar (hookChanged=$($dlObj.hookChanged), state=$curState)，正在同步文件并重新安装..."
+            $ap = Invoke-ProcessCaptured -FilePath $Runtime.Binary -Arguments @($UpdaterScript, 'apply', [string]$dlObj.stagingDir, $ScriptDir) -Environment $Runtime.Env
+            if ($ap.ExitCode -ne 0) {
+                Die "更新文件同步失败：$($ap.Stderr)"
+            }
+        }
+    } finally {
+        if (Test-Path -LiteralPath $tmpUpdDir) {
+            Remove-Item -LiteralPath $tmpUpdDir -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+    $reArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $MyInvocation.MyCommand.Path, '-AppPath', (Split-Path -Parent $ResDir))
+    if ($NonInteractive) { $reArgs += '-NonInteractive' }
+    & powershell.exe @reArgs
+    exit $LASTEXITCODE
 }
 
 if (-not $Uninstall) {

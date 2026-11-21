@@ -102,6 +102,7 @@ jobs:
               "dist/antigravity-custom-themes-${TAG}-universal.zip" \
               "dist/SHA256SUMS.txt" \
               --clobber
+            gh release edit "$TAG" --draft=false --latest
           else
             gh release create "$TAG" \
               "dist/antigravity-custom-themes-${TAG}-macos.zip" \

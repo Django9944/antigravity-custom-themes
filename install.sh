@@ -19,6 +19,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MANIFEST_PATH="${SCRIPT_DIR}/manifest.json"
 PATCHER_SCRIPT="${SCRIPT_DIR}/core/asar-patcher.js"
+UPDATER_SCRIPT="${SCRIPT_DIR}/core/updater.js"
+LAUNCH_AGENT_LABEL="com.django9944.antigravity-custom-themes.autoheal"
 
 read_manifest_field() {
     local key="$1"
@@ -72,8 +74,12 @@ usage() {
 选项:
   --install              安装或修复 Antigravity 主题补丁 (默认)
   --uninstall, -u        卸载主题补丁并还原原厂 app.asar
-  --check-update         检查 GitHub 最新发行版 (${REPO})
+  --check-update         检查 GitHub 最新发行版 (${REPO})，支持一键在线更新
+  --update               自动下载校验最新 Release 并智能热更新/重注入
   --doctor               只读诊断当前 Antigravity 的 app.asar 兼容性与注入状态
+  --enable-auto-heal     启用 macOS LaunchAgent 监听 app.asar，宿主升级后自动恢复主题
+  --disable-auto-heal    停用并移除宿主升级自动恢复监听
+  --auto-heal            静默执行一次宿主升级检测与自愈重注入 (供 LaunchAgent 调用)
   --app-path <path>      指定 Antigravity.app 路径 (默认自动探测)
   --non-interactive, -y  非交互静默模式 (跳过确认、不关闭或重启正在运行的客户端)
   --help, -h             显示帮助信息
@@ -95,8 +101,25 @@ while [ $# -gt 0 ]; do
             MODE="check-update"
             shift
             ;;
+        --update|-Update)
+            MODE="update"
+            shift
+            ;;
         --doctor|-Doctor)
             MODE="doctor"
+            shift
+            ;;
+        --enable-auto-heal|-EnableAutoHeal)
+            MODE="enable-auto-heal"
+            shift
+            ;;
+        --disable-auto-heal|-DisableAutoHeal)
+            MODE="disable-auto-heal"
+            shift
+            ;;
+        --auto-heal|-AutoHeal)
+            MODE="auto-heal"
+            NON_INTERACTIVE=1
             shift
             ;;
         --app-path)
@@ -177,8 +200,10 @@ if [ "$MODE" = "check-update" ]; then
         ok "发现新版本：${REMOTE_TAG} （当前版本：${CURRENT_VERSION}）"
         printf "${C_GRAY}    发布时间：%s${C_RESET}\n" "$PUBLISHED_AT"
         if [ "$NON_INTERACTIVE" -eq 0 ]; then
-            read -r -p "是否在浏览器中打开最新版本下载页面？(Y/N) [默认 Y]: " OPEN_ANS || OPEN_ANS="Y"
+            read -r -p "是否立即自动下载校验并更新？(Y=自动更新 / B=仅打开浏览器 / N=取消) [默认 Y]: " OPEN_ANS || OPEN_ANS="Y"
             if [ -z "$OPEN_ANS" ] || [[ "$OPEN_ANS" =~ ^[Yy] ]]; then
+                exec bash "$0" --update ${CUSTOM_APP_PATH:+--app-path "$CUSTOM_APP_PATH"}
+            elif [[ "$OPEN_ANS" =~ ^[Bb] ]]; then
                 open "$HTML_URL" >/dev/null 2>&1 || true
                 ok "已调起默认浏览器打开发布页面。"
             fi
@@ -533,6 +558,19 @@ PY_EOF
     fi
 }
 
+# ---------- 停用宿主升级自动恢复 (--disable-auto-heal) ----------
+if [ "$MODE" = "disable-auto-heal" ]; then
+    PLIST_FILE="${USER_HOME}/Library/LaunchAgents/${LAUNCH_AGENT_LABEL}.plist"
+    if [ -f "$PLIST_FILE" ]; then
+        launchctl unload "$PLIST_FILE" >/dev/null 2>&1 || true
+        rm -f "$PLIST_FILE"
+        ok "已停用并移除宿主升级自动恢复监听 (${PLIST_FILE})"
+    else
+        ok "当前未启用宿主升级自动恢复监听。"
+    fi
+    exit 0
+fi
+
 # ---------- 只读诊断模式 (--doctor) ----------
 if [ "$MODE" = "doctor" ]; then
     APP_VER="unknown"
@@ -543,6 +581,109 @@ if [ "$MODE" = "doctor" ]; then
     info "Antigravity Version: ${APP_VER} | Runtime: ${NODE_BIN}"
     run_asar_engine doctor "$ASAR_PATH"
     exit $?
+fi
+
+# ---------- 启用宿主升级自动恢复 (--enable-auto-heal) ----------
+if [ "$MODE" = "enable-auto-heal" ]; then
+    LAUNCH_DIR="${USER_HOME}/Library/LaunchAgents"
+    PLIST_FILE="${LAUNCH_DIR}/${LAUNCH_AGENT_LABEL}.plist"
+    LOG_FILE="${USER_DATA_DIR}/custom-theme-autoheal.log"
+    mkdir -p "$LAUNCH_DIR" "$USER_DATA_DIR"
+    cat > "$PLIST_FILE" <<PLIST_EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>${LAUNCH_AGENT_LABEL}</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>${SCRIPT_DIR}/install.sh</string>
+        <string>--auto-heal</string>
+        <string>--app-path</string>
+        <string>${APP_PATH}</string>
+    </array>
+    <key>WatchPaths</key>
+    <array>
+        <string>${ASAR_PATH}</string>
+    </array>
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+    <key>StandardOutPath</key>
+    <string>${LOG_FILE}</string>
+    <key>StandardErrorPath</key>
+    <string>${LOG_FILE}</string>
+</dict>
+</plist>
+PLIST_EOF
+    fix_user_ownership "$PLIST_FILE"
+    launchctl unload "$PLIST_FILE" >/dev/null 2>&1 || true
+    launchctl load -w "$PLIST_FILE" >/dev/null 2>&1 || true
+    ok "已启用宿主升级自动恢复监听 (LaunchAgent: ${LAUNCH_AGENT_LABEL})"
+    printf "${C_GRAY}    监听目标: %s${C_RESET}\n" "$ASAR_PATH"
+    printf "${C_GRAY}    停用命令: ./install.sh --disable-auto-heal${C_RESET}\n"
+    exit 0
+fi
+
+# ---------- 静默自愈模式 (--auto-heal，宿主更新覆盖 app.asar 后自动恢复) ----------
+if [ "$MODE" = "auto-heal" ]; then
+    ASAR_STATE="$(run_asar_engine inspect "$ASAR_PATH" 2>/dev/null || echo "ANCHOR_MISSING")"
+    if [ "$ASAR_STATE" = "PATCHED_V1" ]; then
+        exit 0
+    fi
+    if [ "$ASAR_STATE" = "ANCHOR_MISSING" ]; then
+        warn "检测到 Antigravity 已升级且注入锚点发生变化，已安全跳过自动恢复。请运行 ./install.sh --update 更新主题包。"
+        if command -v osascript >/dev/null 2>&1; then
+            osascript -e 'display notification "Antigravity 锚点已变化，请运行 ./install.sh --update 更新主题包" with title "Antigravity Custom Themes"' >/dev/null 2>&1 || true
+        fi
+        exit 2
+    fi
+    info "检测到宿主升级覆盖了 app.asar (${ASAR_STATE})，正在静默恢复主题注入..."
+    MODE="install"
+    NON_INTERACTIVE=1
+fi
+
+# ---------- 一键在线自动更新 (--update) ----------
+if [ "$MODE" = "update" ]; then
+    [ "$NODE_BIN" != "PYTHON3_FALLBACK" ] || die "在线自动更新需要 Node.js / Antigravity 内置运行时。"
+    [ -f "$UPDATER_SCRIPT" ] || die "缺少更新引擎 core/updater.js —— 请在完整目录内运行。"
+    info "正在检查并拉取最新发行版 (${REPO})..."
+    CHECK_JSON="$(env "${NODE_ENV_ARGS[@]}" "$NODE_BIN" "$UPDATER_SCRIPT" check --platform macos)" || die "检查更新失败，请检查网络连接。"
+    HAS_UPDATE="$(printf '%s' "$CHECK_JSON" | env "${NODE_ENV_ARGS[@]}" "$NODE_BIN" -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); console.log(d.hasUpdate ? '1' : '0');")"
+    REMOTE_TAG="$(printf '%s' "$CHECK_JSON" | env "${NODE_ENV_ARGS[@]}" "$NODE_BIN" -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); console.log(d.remoteTag || '');")"
+    if [ "$HAS_UPDATE" != "1" ]; then
+        ok "当前已是最新版本 (${CURRENT_VERSION})，无需更新。"
+        exit 0
+    fi
+
+    info "发现新版本 ${REMOTE_TAG}，正在下载并校验 SHA256SUMS.txt..."
+    TMP_UPD_DIR="$(mktemp -d "${TMPDIR:-/tmp}/ag-theme-update.XXXXXX")"
+    trap 'rm -rf "$TMP_UPD_DIR"' EXIT
+    DL_JSON="$(env "${NODE_ENV_ARGS[@]}" "$NODE_BIN" "$UPDATER_SCRIPT" download "$TMP_UPD_DIR" --platform macos)" || die "下载或 SHA256 校验失败，已终止更新。"
+    STAGING_DIR="$(printf '%s' "$DL_JSON" | env "${NODE_ENV_ARGS[@]}" "$NODE_BIN" -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); console.log(d.stagingDir);")"
+    HOOK_CHANGED="$(printf '%s' "$DL_JSON" | env "${NODE_ENV_ARGS[@]}" "$NODE_BIN" -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); console.log(d.hookChanged ? '1' : '0');")"
+    CHECKSUM_OK="$(printf '%s' "$DL_JSON" | env "${NODE_ENV_ARGS[@]}" "$NODE_BIN" -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); console.log(d.checksumVerified ? '1' : '0');")"
+    [ "$CHECKSUM_OK" = "1" ] && ok "ZIP 完整性校验通过 (SHA256SUMS.txt)"
+
+    ASAR_STATE="$(run_asar_engine inspect "$ASAR_PATH" 2>/dev/null || echo "UNKNOWN")"
+    if [ "$HOOK_CHANGED" = "0" ] && [ "$ASAR_STATE" = "PATCHED_V1" ]; then
+        info "Hook 无需变动，执行零中断热更新..."
+        env "${NODE_ENV_ARGS[@]}" "$NODE_BIN" "$UPDATER_SCRIPT" apply "$STAGING_DIR" "$SCRIPT_DIR" "$APP_THEME_DIR" "$USER_THEME_DIR" >/dev/null
+        fix_user_ownership "$USER_DATA_DIR"
+        ok "热更新完成：${CURRENT_VERSION} -> ${REMOTE_TAG}！在 Antigravity 窗口按 Cmd + R 即可秒级生效。"
+        exit 0
+    else
+        info "检测到需要重新注入 app.asar (hookChanged=${HOOK_CHANGED}, state=${ASAR_STATE})，正在同步文件并重新安装..."
+        env "${NODE_ENV_ARGS[@]}" "$NODE_BIN" "$UPDATER_SCRIPT" apply "$STAGING_DIR" "$SCRIPT_DIR" >/dev/null
+        rm -rf "$TMP_UPD_DIR"
+        trap - EXIT
+        if [ "$NON_INTERACTIVE" -eq 1 ]; then
+            exec bash "${SCRIPT_DIR}/install.sh" --install --app-path "$APP_PATH" --non-interactive
+        else
+            exec bash "${SCRIPT_DIR}/install.sh" --install --app-path "$APP_PATH"
+        fi
+    fi
 fi
 
 # ---------- 目录写权限检查与按需 sudo 提权 ----------

@@ -6,13 +6,16 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
+const require = createRequire(import.meta.url);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT = path.resolve(__dirname, '..');
 const PATCHER = path.join(ROOT, 'core', 'asar-patcher.js');
+const UPDATER = path.join(ROOT, 'core', 'updater.js');
 const MANIFEST_PATH = path.join(ROOT, 'manifest.json');
 
 function sha256(buf) {
@@ -127,11 +130,39 @@ try {
         }
     });
 
-    test('current.js and core/asar-patcher.js pass node --check', () => {
-        for (const rel of ['current.js', path.join('core', 'asar-patcher.js')]) {
+    test('current.js, core/asar-patcher.js, and core/updater.js pass node --check', () => {
+        for (const rel of ['current.js', path.join('core', 'asar-patcher.js'), path.join('core', 'updater.js')]) {
             const res = spawnSync(process.execPath, ['--check', path.join(ROOT, rel)], { encoding: 'utf8' });
             assert.equal(res.status, 0, `${rel} syntax check failed: ${res.stderr}`);
         }
+    });
+
+    test('current.js THEME_PACK_VERSION matches manifest.json version', () => {
+        const manifest = JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'));
+        const js = fs.readFileSync(path.join(ROOT, 'current.js'), 'utf8');
+        const m = js.match(/const\s+THEME_PACK_VERSION\s*=\s*'([^']+)'/);
+        assert.ok(m, 'current.js must define THEME_PACK_VERSION');
+        assert.equal(m[1], manifest.version, 'current.js THEME_PACK_VERSION must match manifest.json version');
+    });
+
+    test('core/updater.js semver, SHA256SUMS verification, and hot/full update decision', () => {
+        const updater = require(UPDATER);
+        assert.equal(updater.compareSemver('v2.4.0', 'v2.3.3'), 1);
+        assert.equal(updater.compareSemver('v2.3.3', 'v2.3.3'), 0);
+        assert.equal(updater.compareSemver('v2.3.2', 'v2.3.3'), -1);
+
+        const sampleZip = path.join(tmpDir, 'sample-macos.zip');
+        fs.writeFileSync(sampleZip, Buffer.from('synthetic-zip-payload'));
+        const goodHash = sha256(fs.readFileSync(sampleZip));
+        const sumsText = `${goodHash}  sample-macos.zip\n0000000000000000000000000000000000000000000000000000000000000000  other.zip\n`;
+        assert.equal(updater.verifyFileSha256(sampleZip, sumsText, 'sample-macos.zip').ok, true);
+        assert.equal(updater.verifyFileSha256(sampleZip, sumsText, 'other.zip').ok, false);
+        assert.equal(updater.verifyFileSha256(sampleZip, sumsText, 'missing.zip').ok, false);
+
+        assert.equal(updater.decideUpdateMode({ oldHookVersion: 'v1', newHookVersion: 'v1', asarState: 'PATCHED_V1' }), 'hot');
+        assert.equal(updater.decideUpdateMode({ oldHookVersion: 'v1', newHookVersion: 'v2', asarState: 'PATCHED_V1' }), 'full');
+        assert.equal(updater.decideUpdateMode({ oldHookVersion: 'v1', newHookVersion: 'v1', asarState: 'CLEAN' }), 'full');
+        assert.equal(updater.decideUpdateMode({ oldHookVersion: 'v1', newHookVersion: 'v1', asarState: 'PATCHED_LEGACY' }), 'full');
     });
 
     test('current.css has balanced braces and theme scoping', () => {
@@ -319,11 +350,29 @@ try {
             assert.equal(sha256(fs.readFileSync(fakeAsar)), sha256(stockBuf), 'uninstalled ASAR must match stock byte-for-byte');
             assert.ok(!fs.existsSync(path.join(fakeRes, 'app.asar.stock-backup')), 'backup should be cleaned on uninstall');
             assert.ok(!fs.existsSync(path.join(fakeUserData, 'custom-theme')), 'userData custom-theme should be cleaned on uninstall');
+
+            // AutoHeal on CLEAN -> re-injects automatically
+            r = spawnSync(psExe, [...psBase, '-AutoHeal'], { encoding: 'utf8', env: winEnv });
+            assert.equal(r.status, 0, `install.ps1 -AutoHeal (CLEAN) failed:\n${r.stdout}\n${r.stderr}`);
+            const healedHash = sha256(fs.readFileSync(fakeAsar));
+            assert.notEqual(healedHash, sha256(stockBuf), 'AutoHeal should re-inject CLEAN app.asar');
+
+            // AutoHeal on PATCHED_V1 -> no-op, bytes unchanged
+            r = spawnSync(psExe, [...psBase, '-AutoHeal'], { encoding: 'utf8', env: winEnv });
+            assert.equal(r.status, 0, `install.ps1 -AutoHeal (PATCHED_V1) failed:\n${r.stdout}\n${r.stderr}`);
+            assert.equal(sha256(fs.readFileSync(fakeAsar)), healedHash, 'AutoHeal must be a no-op when already PATCHED_V1');
+
+            // AutoHeal on ANCHOR_MISSING -> exits 2 without modifying ASAR
+            const badBuf = createSyntheticAsar('function noAnchor() {}\n');
+            fs.writeFileSync(fakeAsar, badBuf);
+            r = spawnSync(psExe, [...psBase, '-AutoHeal'], { encoding: 'utf8', env: winEnv });
+            assert.equal(r.status, 2, 'AutoHeal must exit 2 when anchor is missing');
+            assert.equal(sha256(fs.readFileSync(fakeAsar)), sha256(badBuf), 'AutoHeal must not modify incompatible ASAR');
         });
     }
 
     if (process.platform === 'darwin' || process.platform === 'linux') {
-        test('Unix install.sh end-to-end sandbox install -> doctor -> uninstall', () => {
+        test('Unix install.sh end-to-end sandbox install -> doctor -> uninstall -> auto-heal', () => {
             const fakeApp = path.join(tmpDir, 'FakeAntigravity.app');
             const fakeRes = path.join(fakeApp, 'Contents', 'Resources');
             const fakeUserData = path.join(tmpDir, 'UserData');
@@ -345,6 +394,24 @@ try {
             r = spawnSync('bash', [...baseArgs, '--uninstall'], { encoding: 'utf8', env });
             assert.equal(r.status, 0, `install.sh --uninstall failed:\n${r.stdout}\n${r.stderr}`);
             assert.equal(sha256(fs.readFileSync(fakeAsar)), sha256(stockBuf), 'uninstalled ASAR must match stock byte-for-byte');
+
+            // Auto-heal on CLEAN -> re-injects
+            r = spawnSync('bash', [...baseArgs, '--auto-heal'], { encoding: 'utf8', env });
+            assert.equal(r.status, 0, `install.sh --auto-heal (CLEAN) failed:\n${r.stdout}\n${r.stderr}`);
+            const healedHash = sha256(fs.readFileSync(fakeAsar));
+            assert.notEqual(healedHash, sha256(stockBuf));
+
+            // Auto-heal on PATCHED_V1 -> no-op
+            r = spawnSync('bash', [...baseArgs, '--auto-heal'], { encoding: 'utf8', env });
+            assert.equal(r.status, 0);
+            assert.equal(sha256(fs.readFileSync(fakeAsar)), healedHash);
+
+            // Auto-heal on ANCHOR_MISSING -> exits 2 without modifying ASAR
+            const badBuf = createSyntheticAsar('function noAnchor() {}\n');
+            fs.writeFileSync(fakeAsar, badBuf);
+            r = spawnSync('bash', [...baseArgs, '--auto-heal'], { encoding: 'utf8', env });
+            assert.equal(r.status, 2);
+            assert.equal(sha256(fs.readFileSync(fakeAsar)), sha256(badBuf));
         });
     }
 } finally {
