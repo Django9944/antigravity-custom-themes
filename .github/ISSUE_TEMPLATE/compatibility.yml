@@ -1,0 +1,37 @@
+name: 宿主版本兼容性反馈 (Compatibility Report)
+description: Antigravity IDE 升级后主题失效、注入锚点缺失或样式错位
+title: "[Compat] Antigravity 版本兼容性问题："
+labels: ["compatibility"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈！提交前请先在主题目录运行只读诊断命令，并将输出粘贴到下方：
+        - **macOS**: `./install.sh --doctor`
+        - **Windows**: `powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -Doctor`
+  - type: dropdown
+    id: os
+    attributes:
+      label: 操作系统
+      options:
+        - macOS (Apple Silicon)
+        - macOS (Intel)
+        - Windows 11
+        - Windows 10
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: 诊断输出 (--doctor / -Doctor)
+      description: 请粘贴完整的诊断文本输出（已自动脱敏，不含个人隐私）
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: 现象描述或截图
+      description: 描述具体报错、失效的界面区域或贴上截图
+    validations:
+      required: true

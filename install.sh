@@ -1,26 +1,42 @@
 #!/usr/bin/env bash
 # =====================================================================
 #  Antigravity Custom Themes - macOS One-Click Installer & Manager
-#  Version: v2.3.2-mac
 #  Based on MCRYII/antigravity-custom-themes (Copyright (c) 2026 MCRYII), licensed under the MIT License.
 #  macOS Adaptation & Zero-Dependency ASAR Engine (Copyright (c) 2026 Django9944), licensed under the MIT License.
 #  功能:
 #    1) 自动定位 Antigravity.app (/Applications, ~/Applications, Spotlight)
 #    2) 原厂备份与逆向剥离自愈 (~/Library/Application Support/Antigravity/custom-theme-backup/app.asar.stock)
-#    3) 零外部依赖注入 app.asar (复用内置 ELECTRON_RUN_AS_NODE=1 或 python3，重算 SHA256 与 4MB 分块哈希)
+#    3) 调用跨平台共享引擎 core/asar-patcher.js (复用内置 ELECTRON_RUN_AS_NODE=1，Python 3 读取 manifest.json 兜底)
 #    4) 保持 Contents/Info.plist 与 _CodeSignature 原始签名不动，不破坏 macOS TCC 权限
 #    5) 双目录分发主题文件 (Contents/Resources/custom-theme 与 ~/Library/Application Support/Antigravity/custom-theme)
 #
 #  用法:
-#    ./install.sh [--install] [--uninstall] [--check-update] [--app-path <path>] [--non-interactive|-y]
+#    ./install.sh [--install] [--uninstall] [--check-update] [--doctor] [--app-path <path>] [--non-interactive|-y]
 # =====================================================================
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CURRENT_VERSION="v2.3.2"
-UPSTREAM_REPO="MCRYII/antigravity-custom-themes"
-RELEASES_URL="https://github.com/${UPSTREAM_REPO}/releases/latest"
+MANIFEST_PATH="${SCRIPT_DIR}/manifest.json"
+PATCHER_SCRIPT="${SCRIPT_DIR}/core/asar-patcher.js"
+
+read_manifest_field() {
+    local key="$1"
+    local fallback="$2"
+    if [ -f "$MANIFEST_PATH" ]; then
+        local val
+        val="$(grep -m1 "\"${key}\"[[:space:]]*:" "$MANIFEST_PATH" | sed -E "s/.*\"${key}\"[[:space:]]*:[[:space:]]*\"([^\"]+)\".*/\1/" || true)"
+        if [ -n "$val" ]; then
+            echo "$val"
+            return 0
+        fi
+    fi
+    echo "$fallback"
+}
+
+CURRENT_VERSION="$(read_manifest_field "version" "v2.3.3")"
+REPO="$(read_manifest_field "repo" "Django9944/antigravity-custom-themes")"
+RELEASES_URL="https://github.com/${REPO}/releases/latest"
 PAYLOADS=("current.css" "current.js")
 
 MODE="install"
@@ -56,7 +72,8 @@ usage() {
 选项:
   --install              安装或修复 Antigravity 主题补丁 (默认)
   --uninstall, -u        卸载主题补丁并还原原厂 app.asar
-  --check-update         检查 GitHub 最新发行版
+  --check-update         检查 GitHub 最新发行版 (${REPO})
+  --doctor               只读诊断当前 Antigravity 的 app.asar 兼容性与注入状态
   --app-path <path>      指定 Antigravity.app 路径 (默认自动探测)
   --non-interactive, -y  非交互静默模式 (跳过确认、不关闭或重启正在运行的客户端)
   --help, -h             显示帮助信息
@@ -76,6 +93,10 @@ while [ $# -gt 0 ]; do
             ;;
         --check-update|-CheckUpdate)
             MODE="check-update"
+            shift
+            ;;
+        --doctor|-Doctor)
+            MODE="doctor"
             shift
             ;;
         --app-path)
@@ -128,8 +149,8 @@ fix_user_ownership() {
 
 # ---------- 检查更新分支 ----------
 if [ "$MODE" = "check-update" ]; then
-    info "正在检测 GitHub 最新发行版 (${UPSTREAM_REPO})..."
-    API_URL="https://api.github.com/repos/${UPSTREAM_REPO}/releases/latest"
+    info "正在检测 GitHub 最新发行版 (${REPO})..."
+    API_URL="https://api.github.com/repos/${REPO}/releases/latest"
     if ! command -v curl >/dev/null 2>&1; then
         die "未找到 curl 命令，请直接访问: ${RELEASES_URL}"
     fi
@@ -142,8 +163,8 @@ if [ "$MODE" = "check-update" ]; then
     [ -n "$PUBLISHED_AT" ] || PUBLISHED_AT="近期"
 
     if [ -z "$REMOTE_TAG" ]; then
-        warn "检查更新失败（无法获取远端版本信息）。"
-        printf "${C_GRAY}    您也可以直接在浏览器中访问：${C_RESET}\n"
+        warn "检查更新失败（无法获取远端版本信息，或仓库尚未发布正式 Release）。"
+        printf "${C_GRAY}    您也可以随时直接在浏览器中访问：${C_RESET}\n"
         printf "${C_CYAN}    %s${C_RESET}\n" "$RELEASES_URL"
         exit 0
     fi
@@ -173,11 +194,9 @@ normalize_app_path() {
     local input="$1"
     input="${input%/}"
     if [ -f "$input" ] && [ "$(basename "$input")" = "app.asar" ]; then
-        # /path/to/Antigravity.app/Contents/Resources/app.asar
         echo "$(cd "$(dirname "$input")/../.." && pwd)"
         return 0
     elif [ -d "$input" ] && [ -f "$input/app.asar" ]; then
-        # /path/to/Antigravity.app/Contents/Resources
         echo "$(cd "$input/../.." && pwd)"
         return 0
     elif [ -d "$input" ] && [ -f "$input/Contents/Resources/app.asar" ]; then
@@ -239,7 +258,10 @@ USER_THEME_DIR="${USER_DATA_DIR}/custom-theme"
 
 ok "已定位客户端：${APP_PATH}"
 
-# ---------- 载荷校验 (Fail-Fast) ----------
+# ---------- 载荷与核心引擎校验 (Fail-Fast) ----------
+if [ ! -f "$MANIFEST_PATH" ]; then
+    die "缺少清单文件 manifest.json —— 请在完整的主题包目录内运行本脚本。"
+fi
 if [ "$MODE" = "install" ]; then
     for f in "${PAYLOADS[@]}"; do
         if [ ! -f "${SCRIPT_DIR}/${f}" ]; then
@@ -248,43 +270,32 @@ if [ "$MODE" = "install" ]; then
     done
 fi
 
-# ---------- 目录写权限检查与按需 sudo 提权 ----------
-if [ ! -w "$RES_DIR" ] || [ ! -w "$ASAR_PATH" ]; then
-    if [ "${EUID:-$(id -u)}" -ne 0 ]; then
-        if [ "$NON_INTERACTIVE" -eq 1 ]; then
-            die "目标目录没有写权限 (${RES_DIR})，请使用 sudo 运行或修改目录权限。"
-        fi
-        warn "目标应用目录 (${RES_DIR}) 需要管理员权限写入，正在请求 sudo 授权..."
-        exec sudo -E bash "$0" "$@"
-    else
-        die "无法写入目标文件: ${ASAR_PATH} (请检查 SIP 或文件系统只读状态)"
-    fi
-fi
-
 # ---------- 选择零依赖 ASAR 处理运行时 (内置 Electron Node -> 系统 Node -> Python 3) ----------
 NODE_BIN=""
 NODE_ENV_ARGS=()
 
 select_asar_runtime() {
-    local electron_candidates=(
-        "${APP_PATH}/Contents/MacOS/Antigravity"
-        "/Applications/Antigravity.app/Contents/MacOS/Antigravity"
-        "${USER_HOME}/Applications/Antigravity.app/Contents/MacOS/Antigravity"
-    )
-    for bin in "${electron_candidates[@]}"; do
-        if [ -x "$bin" ]; then
-            if ELECTRON_RUN_AS_NODE=1 ELECTRON_NO_ASAR=1 "$bin" -e "process.exit(0)" >/dev/null 2>&1; then
-                NODE_BIN="$bin"
-                NODE_ENV_ARGS=("ELECTRON_RUN_AS_NODE=1" "ELECTRON_NO_ASAR=1")
-                return 0
+    if [ -f "$PATCHER_SCRIPT" ]; then
+        local electron_candidates=(
+            "${APP_PATH}/Contents/MacOS/Antigravity"
+            "/Applications/Antigravity.app/Contents/MacOS/Antigravity"
+            "${USER_HOME}/Applications/Antigravity.app/Contents/MacOS/Antigravity"
+        )
+        for bin in "${electron_candidates[@]}"; do
+            if [ -x "$bin" ]; then
+                if ELECTRON_RUN_AS_NODE=1 ELECTRON_NO_ASAR=1 "$bin" -e "process.exit(0)" >/dev/null 2>&1; then
+                    NODE_BIN="$bin"
+                    NODE_ENV_ARGS=("ELECTRON_RUN_AS_NODE=1" "ELECTRON_NO_ASAR=1")
+                    return 0
+                fi
             fi
-        fi
-    done
+        done
 
-    if command -v node >/dev/null 2>&1; then
-        NODE_BIN="$(command -v node)"
-        NODE_ENV_ARGS=("ELECTRON_NO_ASAR=1")
-        return 0
+        if command -v node >/dev/null 2>&1; then
+            NODE_BIN="$(command -v node)"
+            NODE_ENV_ARGS=("ELECTRON_NO_ASAR=1")
+            return 0
+        fi
     fi
 
     if command -v python3 >/dev/null 2>&1; then
@@ -297,312 +308,50 @@ select_asar_runtime() {
 
 select_asar_runtime
 
-# ---------- 核心 ASAR 处理引擎 (支持 inspect / inject / strip / verify) ----------
+# ---------- 核心 ASAR 处理引擎 (统一调用 core/asar-patcher.js，Python 3 读取 manifest.json 兜底) ----------
 run_asar_engine() {
     local action="$1"
     local target_asar="$2"
     local output_asar="${3:-}"
 
     if [ "$NODE_BIN" != "PYTHON3_FALLBACK" ]; then
-        env "${NODE_ENV_ARGS[@]}" "$NODE_BIN" - "$action" "$target_asar" "$output_asar" <<'NODE_EOF'
-process.noAsar = true;
-const fs = require('fs');
-const crypto = require('crypto');
-
-const [action, targetAsar, outputAsar] = process.argv.slice(2);
-const ANCHORS = [
-    'void loadHubWindowUrl(win, url, { skipBootstrapMint });',
-    'void win.loadURL(url);',
-];
-const HOOK_START = '/* === Antigravity Custom Theme Hook v1 === */';
-const HOOK_END = '/* === End Antigravity Custom Theme Hook === */';
-const LEGACY_MARKER = 'custom-theme injection hook';
-
-function findAnchor(text) {
-    for (const a of ANCHORS) {
-        if (text.includes(a)) return a;
-    }
-    const m = text.match(/void\s+(?:loadHubWindowUrl\s*\(\s*win\s*,[^;]*|win\.loadURL\s*\([^;]*)\)\s*;/);
-    return m ? m[0] : null;
-}
-
-const HOOK_BLOCK = `
-/* === Antigravity Custom Theme Hook v1 === */
-try {
-    const path_ = require('path');
-    const fs_ = require('fs');
-    const _ctCandidates = [
-        path_.join(process.resourcesPath || '', 'custom-theme'),
-        (typeof electron_1 !== 'undefined' && electron_1.app && typeof electron_1.app.getPath === 'function')
-            ? path_.join(electron_1.app.getPath('userData'), 'custom-theme') : '',
-        path_.join(process.env.HOME || '', 'Library', 'Application Support', 'Antigravity', 'custom-theme'),
-        path_.join(process.env.APPDATA || '', 'Antigravity', 'custom-theme')
-    ].filter(Boolean);
-    const _ctRead = (name) => {
-        for (const _d of _ctCandidates) {
-            try {
-                const _f = path_.join(_d, name);
-                if (fs_.existsSync(_f)) return fs_.readFileSync(_f, 'utf8');
-            } catch (e) {}
-        }
-        return null;
-    };
-    const _ctInject = () => {
-        try {
-            if (win.isDestroyed?.() || win.webContents?.isDestroyed?.()) return;
-            const _css = _ctRead('current.css');
-            if (_css && _css.trim()) win.webContents.insertCSS(_css).catch(() => {});
-            const _js = _ctRead('current.js');
-            if (_js && _js.trim()) win.webContents.executeJavaScript(_js, true).catch(() => {});
-        } catch (e) {}
-    };
-    win.webContents.on('dom-ready', _ctInject);
-    win.webContents.on('did-finish-load', _ctInject);
-} catch (e) {}
-/* === End Antigravity Custom Theme Hook === */`;
-
-function parseAsar(filePath) {
-    if (!fs.existsSync(filePath)) {
-        throw new Error(`ASAR 文件不存在: ${filePath}`);
-    }
-    const buf = fs.readFileSync(filePath);
-    if (buf.length < 16) {
-        throw new Error(`ASAR 文件长度不足 16 字节: ${filePath}`);
-    }
-    const u0 = buf.readUInt32LE(0);
-    const H = buf.readUInt32LE(4);
-    const payloadSize = buf.readUInt32LE(8);
-    const jsonLen = buf.readUInt32LE(12);
-    const dataStart = 8 + H;
-    if (u0 !== 4 || jsonLen === 0 || 16 + jsonLen > buf.length || dataStart > buf.length) {
-        throw new Error(`ASAR 头部结构无效 (u0=${u0}, H=${H}, jsonLen=${jsonLen}, len=${buf.length})`);
-    }
-    const jsonStr = buf.toString('utf8', 16, 16 + jsonLen);
-    const tree = JSON.parse(jsonStr);
-    const utilsNode = tree?.files?.dist?.files?.['utils.js'];
-    if (!utilsNode || utilsNode.offset === undefined || utilsNode.size === undefined) {
-        throw new Error('ASAR 头部未找到 dist/utils.js 条目');
-    }
-    const offset = Number(utilsNode.offset);
-    const size = Number(utilsNode.size);
-    if (offset < 0 || size <= 0 || dataStart + offset + size > buf.length) {
-        throw new Error(`dist/utils.js 偏移或大小越界 (offset=${offset}, size=${size})`);
-    }
-    const content = buf.toString('utf8', dataStart + offset, dataStart + offset + size);
-    return { buf, H, payloadSize, jsonLen, dataStart, tree, utilsNode, offset, size, content };
-}
-
-function stripHooksFromText(text) {
-    let out = text;
-    // Strip v1 block comment hook
-    out = out.replace(/\r?\n\/\* === Antigravity Custom Theme Hook v\d+ === \*\/[\s\S]*?\/\* === End Antigravity Custom Theme Hook === \*\//g, '');
-    out = out.replace(/\/\* === Antigravity Custom Theme Hook v\d+ === \*\/[\s\S]*?\/\* === End Antigravity Custom Theme Hook === \*\/\r?\n?/g, '');
-    // Strip legacy Windows line-comment hook
-    out = out.replace(/[ \t]*\/\/ === Antigravity custom-theme injection hook(?: v\d+)? \(start\) ===[\s\S]*?\/\/ === Antigravity custom-theme injection hook(?: v\d+)? \(end\) ===\r?\n?/g, '');
-    return out;
-}
-
-function verifyNodeIntegrity(buf, dataStart, node) {
-    const off = Number(node.offset);
-    const sz = Number(node.size);
-    if (off < 0 || sz < 0 || dataStart + off + sz > buf.length) return false;
-    if (!node.integrity) return true;
-    const slice = buf.subarray(dataStart + off, dataStart + off + sz);
-    const fullHash = crypto.createHash('sha256').update(slice).digest('hex');
-    if (fullHash !== String(node.integrity.hash).toLowerCase()) return false;
-    const bs = Number(node.integrity.blockSize) || 4194304;
-    const blocks = node.integrity.blocks || [];
-    const expectedBlocks = sz === 0 ? 0 : Math.ceil(sz / bs);
-    if (blocks.length !== expectedBlocks) return false;
-    for (let i = 0; i < blocks.length; i++) {
-        const bSlice = slice.subarray(i * bs, Math.min((i + 1) * bs, sz));
-        const bHash = crypto.createHash('sha256').update(bSlice).digest('hex');
-        if (bHash !== String(blocks[i]).toLowerCase()) return false;
-    }
-    return true;
-}
-
-function verifyAllBounds(buf, dataStart, root) {
-    let ok = true;
-    function walk(n) {
-        if (!n || !n.files) return;
-        for (const v of Object.values(n.files)) {
-            if (v.files) walk(v);
-            else if (v.offset !== undefined && v.size !== undefined) {
-                const off = Number(v.offset);
-                const sz = Number(v.size);
-                if (off < 0 || sz < 0 || dataStart + off + sz > buf.length) {
-                    ok = false;
-                }
-            }
-        }
-    }
-    walk(root);
-    return ok;
-}
-
-function rebuildAsarWithNewUtils(parsed, newUtilsStr) {
-    const { buf, dataStart, tree, utilsNode, offset: oldOff, size: oldSize } = parsed;
-    const newUtilsBuf = Buffer.from(newUtilsStr, 'utf8');
-    const delta = newUtilsBuf.length - oldSize;
-
-    utilsNode.size = newUtilsBuf.length;
-    const bs = (utilsNode.integrity && Number(utilsNode.integrity.blockSize)) || 4194304;
-    const blocks = [];
-    for (let i = 0; i < newUtilsBuf.length; i += bs) {
-        blocks.push(
-            crypto.createHash('sha256')
-                .update(newUtilsBuf.subarray(i, Math.min(i + bs, newUtilsBuf.length)))
-                .digest('hex')
-        );
-    }
-    utilsNode.integrity = {
-        algorithm: 'SHA256',
-        hash: crypto.createHash('sha256').update(newUtilsBuf).digest('hex'),
-        blockSize: bs,
-        blocks
-    };
-
-    function shiftOffsets(node) {
-        if (!node || !node.files) return;
-        for (const v of Object.values(node.files)) {
-            if (v.files) shiftOffsets(v);
-            else if (v.offset !== undefined && Number(v.offset) > oldOff) {
-                v.offset = String(Number(v.offset) + delta);
-            }
-        }
-    }
-    shiftOffsets(tree);
-
-    const newJsonBuf = Buffer.from(JSON.stringify(tree), 'utf8');
-    const pad = (4 - (newJsonBuf.length % 4)) % 4;
-    const newPayloadSize = 4 + newJsonBuf.length + pad;
-    const newH = 8 + newJsonBuf.length + pad;
-    const headerBuf = Buffer.alloc(16 + newJsonBuf.length + pad, 0);
-    headerBuf.writeUInt32LE(4, 0);
-    headerBuf.writeUInt32LE(newH, 4);
-    headerBuf.writeUInt32LE(newPayloadSize, 8);
-    headerBuf.writeUInt32LE(newJsonBuf.length, 12);
-    newJsonBuf.copy(headerBuf, 16);
-
-    return Buffer.concat([
-        headerBuf,
-        buf.subarray(dataStart, dataStart + oldOff),
-        newUtilsBuf,
-        buf.subarray(dataStart + oldOff + oldSize)
-    ]);
-}
-
-try {
-    const parsed = parseAsar(targetAsar);
-    const hasV1Hook = parsed.content.includes(HOOK_START) && parsed.content.includes(HOOK_END);
-    const hasLegacyHook = parsed.content.includes(LEGACY_MARKER);
-    const hasAnchor = Boolean(findAnchor(parsed.content));
-
-    if (action === 'inspect') {
-        if (!hasAnchor) {
-            console.error('ANCHOR_MISSING');
-            process.exit(2);
-        }
-        if (hasV1Hook) {
-            console.log('PATCHED_V1');
-        } else if (hasLegacyHook) {
-            console.log('PATCHED_LEGACY');
-        } else {
-            console.log('CLEAN');
-        }
-        process.exit(0);
-    }
-
-    if (action === 'verify-patched') {
-        const integrityOk = verifyNodeIntegrity(parsed.buf, parsed.dataStart, parsed.utilsNode);
-        const boundsOk = verifyAllBounds(parsed.buf, parsed.dataStart, parsed.tree);
-        const hasCandidates = parsed.content.includes('_ctCandidates') && parsed.content.includes("require('path')") && parsed.content.includes("app.getPath('userData')");
-        if (hasV1Hook && hasAnchor && hasCandidates && integrityOk && boundsOk) {
-            console.log('VERIFY_OK');
-            process.exit(0);
-        }
-        console.error(`VERIFY_FAILED: hook=${hasV1Hook} anchor=${hasAnchor} candidates=${hasCandidates} integrity=${integrityOk} bounds=${boundsOk}`);
-        process.exit(1);
-    }
-
-    if (action === 'verify-clean') {
-        const integrityOk = verifyNodeIntegrity(parsed.buf, parsed.dataStart, parsed.utilsNode);
-        const boundsOk = verifyAllBounds(parsed.buf, parsed.dataStart, parsed.tree);
-        if (!hasV1Hook && !hasLegacyHook && hasAnchor && integrityOk && boundsOk) {
-            console.log('CLEAN_OK');
-            process.exit(0);
-        }
-        console.error(`CLEAN_VERIFY_FAILED: v1=${hasV1Hook} legacy=${hasLegacyHook} anchor=${hasAnchor} integrity=${integrityOk} bounds=${boundsOk}`);
-        process.exit(1);
-    }
-
-    if (action === 'strip') {
-        if (!outputAsar) throw new Error('strip 需要提供输出文件路径');
-        const cleanUtils = stripHooksFromText(parsed.content);
-        if (cleanUtils.includes(HOOK_START) || cleanUtils.includes(LEGACY_MARKER)) {
-            throw new Error('剥离旧版钩子失败，内容仍有残留标记');
-        }
-        const outBuf = rebuildAsarWithNewUtils(parsed, cleanUtils);
-        fs.writeFileSync(outputAsar, outBuf);
-        const check = parseAsar(outputAsar);
-        if (!verifyNodeIntegrity(check.buf, check.dataStart, check.utilsNode) || !verifyAllBounds(check.buf, check.dataStart, check.tree)) {
-            throw new Error('剥离后的 ASAR 完整性校验未通过');
-        }
-        console.log('STRIP_OK');
-        process.exit(0);
-    }
-
-    if (action === 'inject') {
-        if (!outputAsar) throw new Error('inject 需要提供输出文件路径');
-        const cleanUtils = stripHooksFromText(parsed.content);
-        const matchedAnchor = findAnchor(cleanUtils);
-        if (!matchedAnchor) {
-            throw new Error('未找到注入锚点（loadHubWindowUrl / win.loadURL）');
-        }
-        const newUtils = cleanUtils.replace(matchedAnchor, matchedAnchor + HOOK_BLOCK);
-        const outBuf = rebuildAsarWithNewUtils(parsed, newUtils);
-        fs.writeFileSync(outputAsar, outBuf);
-        const check = parseAsar(outputAsar);
-        if (!check.content.includes(HOOK_START) || !verifyNodeIntegrity(check.buf, check.dataStart, check.utilsNode) || !verifyAllBounds(check.buf, check.dataStart, check.tree)) {
-            throw new Error('注入后的临时 ASAR 完整性校验未通过');
-        }
-        console.log(`INJECT_OK:${outBuf.length - parsed.buf.length}`);
-        process.exit(0);
-    }
-
-    throw new Error(`未知操作: ${action}`);
-} catch (err) {
-    console.error(err && err.message ? err.message : String(err));
-    process.exit(1);
-}
-NODE_EOF
+        if [ -n "$output_asar" ]; then
+            env "${NODE_ENV_ARGS[@]}" "$NODE_BIN" "$PATCHER_SCRIPT" "$action" "$target_asar" "$output_asar"
+        else
+            env "${NODE_ENV_ARGS[@]}" "$NODE_BIN" "$PATCHER_SCRIPT" "$action" "$target_asar"
+        fi
     else
-        python3 - "$action" "$target_asar" "$output_asar" <<'PY_EOF'
-import sys, os, json, struct, hashlib, re
+        python3 - "$MANIFEST_PATH" "$action" "$target_asar" "$output_asar" <<'PY_EOF'
+import sys, json, struct, hashlib, re, platform
 
-action = sys.argv[1]
-target_asar = sys.argv[2]
-output_asar = sys.argv[3] if len(sys.argv) > 3 else ""
+manifest_path = sys.argv[1]
+action = sys.argv[2]
+target_asar = sys.argv[3]
+output_asar = sys.argv[4] if len(sys.argv) > 4 else ""
 
-ANCHORS = [
-    "void loadHubWindowUrl(win, url, { skipBootstrapMint });",
-    "void win.loadURL(url);",
-]
-HOOK_START = "/* === Antigravity Custom Theme Hook v1 === */"
-HOOK_END = "/* === End Antigravity Custom Theme Hook === */"
-LEGACY_MARKER = "custom-theme injection hook"
+with open(manifest_path, "r", encoding="utf-8") as mf:
+    MANIFEST = json.load(mf)
+
+ANCHORS = MANIFEST.get("anchors", [])
+FALLBACK_RE = MANIFEST.get("anchorFallbackRegex")
+HOOK_VERSION = MANIFEST.get("hookVersion", "v1")
+HOOK_START = MANIFEST.get("hookStartMarker", f"/* === Antigravity Custom Theme Hook {HOOK_VERSION} === */")
+HOOK_END = MANIFEST.get("hookEndMarker", "/* === End Antigravity Custom Theme Hook === */")
+LEGACY_MARKER = MANIFEST.get("legacyMarker", "custom-theme injection hook")
 
 def find_anchor(text):
     for a in ANCHORS:
         if a in text:
             return a
-    m = re.search(r"void\s+(?:loadHubWindowUrl\s*\(\s*win\s*,[^;]*|win\.loadURL\s*\([^;]*)\)\s*;", text)
-    return m.group(0) if m else None
+    if FALLBACK_RE:
+        m = re.search(FALLBACK_RE, text)
+        if m:
+            return m.group(0)
+    return None
 
-HOOK_BLOCK = """
-/* === Antigravity Custom Theme Hook v1 === */
-try {
+HOOK_BLOCK = f"""
+{HOOK_START}
+try {{
     const path_ = require('path');
     const fs_ = require('fs');
     const _ctCandidates = [
@@ -612,28 +361,46 @@ try {
         path_.join(process.env.HOME || '', 'Library', 'Application Support', 'Antigravity', 'custom-theme'),
         path_.join(process.env.APPDATA || '', 'Antigravity', 'custom-theme')
     ].filter(Boolean);
-    const _ctRead = (name) => {
-        for (const _d of _ctCandidates) {
-            try {
+    const _ctRead = (name) => {{
+        for (const _d of _ctCandidates) {{
+            try {{
                 const _f = path_.join(_d, name);
                 if (fs_.existsSync(_f)) return fs_.readFileSync(_f, 'utf8');
-            } catch (e) {}
-        }
+            }} catch (e) {{}}
+        }}
         return null;
-    };
-    const _ctInject = () => {
-        try {
+    }};
+    const _ctInject = () => {{
+        try {{
             if (win.isDestroyed?.() || win.webContents?.isDestroyed?.()) return;
             const _css = _ctRead('current.css');
-            if (_css && _css.trim()) win.webContents.insertCSS(_css).catch(() => {});
+            if (_css && _css.trim()) win.webContents.insertCSS(_css).catch(() => {{}});
             const _js = _ctRead('current.js');
-            if (_js && _js.trim()) win.webContents.executeJavaScript(_js, true).catch(() => {});
-        } catch (e) {}
-    };
+            if (_js && _js.trim()) win.webContents.executeJavaScript(_js, true).catch(() => {{}});
+        }} catch (e) {{}}
+    }};
     win.webContents.on('dom-ready', _ctInject);
     win.webContents.on('did-finish-load', _ctInject);
-} catch (e) {}
-/* === End Antigravity Custom Theme Hook === */"""
+}} catch (e) {{}}
+{HOOK_END}"""
+
+def collect_utils(root):
+    found = []
+    def walk(node, rel):
+        files = node.get("files") if isinstance(node, dict) else None
+        if not isinstance(files, dict):
+            return
+        for name, child in files.items():
+            if not isinstance(child, dict):
+                continue
+            nxt = f"{rel}/{name}" if rel else name
+            if "files" in child:
+                walk(child, nxt)
+            elif name == "utils.js" and "offset" in child and "size" in child:
+                found.append((nxt, child))
+    walk(root, "")
+    found.sort(key=lambda item: (0 if item[0] == "dist/utils.js" else 1, item[0]))
+    return found
 
 def parse_asar(path):
     with open(path, "rb") as f:
@@ -641,17 +408,49 @@ def parse_asar(path):
     u0, H, payload_size, json_len = struct.unpack("<IIII", buf[:16])
     data_start = 8 + H
     tree = json.loads(buf[16:16+json_len].decode("utf-8"))
-    u_node = tree["files"]["dist"]["files"]["utils.js"]
-    off = int(u_node["offset"])
-    sz = int(u_node["size"])
-    content = buf[data_start+off:data_start+off+sz].decode("utf-8")
-    return buf, data_start, tree, u_node, off, sz, content
+    candidates = collect_utils(tree)
+    if not candidates:
+        raise RuntimeError("ASAR 头部未找到 utils.js 条目")
+    selected = None
+    for rel, node in candidates:
+        off, sz = int(node["offset"]), int(node["size"])
+        if off < 0 or sz <= 0 or data_start + off + sz > len(buf):
+            continue
+        content = buf[data_start+off:data_start+off+sz].decode("utf-8")
+        if find_anchor(content) or HOOK_START in content or LEGACY_MARKER in content:
+            selected = (rel, node, off, sz, content)
+            break
+        if selected is None:
+            selected = (rel, node, off, sz, content)
+    if selected is None:
+        raise RuntimeError("ASAR 中的 utils.js 偏移或大小越界")
+    return buf, data_start, tree, selected[0], selected[1], selected[2], selected[3], selected[4]
 
 def strip_hooks(text):
     out = re.sub(r"\r?\n/\* === Antigravity Custom Theme Hook v\d+ === \*/[\s\S]*?/\* === End Antigravity Custom Theme Hook === \*/", "", text)
     out = re.sub(r"/\* === Antigravity Custom Theme Hook v\d+ === \*/[\s\S]*?/\* === End Antigravity Custom Theme Hook === \*/\r?\n?", "", out)
     out = re.sub(r"[ \t]*// === Antigravity custom-theme injection hook(?: v\d+)? \(start\) ===[\s\S]*?// === Antigravity custom-theme injection hook(?: v\d+)? \(end\) ===\r?\n?", "", out)
     return out
+
+def verify_integrity(buf, data_start, node):
+    off, sz = int(node["offset"]), int(node["size"])
+    if off < 0 or sz < 0 or data_start + off + sz > len(buf):
+        return False
+    integ = node.get("integrity")
+    if not integ:
+        return True
+    data = buf[data_start+off:data_start+off+sz]
+    if hashlib.sha256(data).hexdigest() != str(integ.get("hash", "")).lower():
+        return False
+    bs = int(integ.get("blockSize", 4194304)) or 4194304
+    blocks = integ.get("blocks", [])
+    expected = 0 if sz == 0 else (sz + bs - 1) // bs
+    if len(blocks) != expected:
+        return False
+    for i, b in enumerate(blocks):
+        if hashlib.sha256(data[i*bs:(i+1)*bs]).hexdigest() != str(b).lower():
+            return False
+    return True
 
 def rebuild_asar(buf, data_start, tree, u_node, old_off, old_sz, new_str):
     new_bytes = new_str.encode("utf-8")
@@ -681,22 +480,36 @@ def rebuild_asar(buf, data_start, tree, u_node, old_off, old_sz, new_str):
     hdr = struct.pack("<IIII", 4, new_H, new_payload, len(new_json)) + new_json + (b"\x00" * pad)
     return hdr + buf[data_start:data_start+old_off] + new_bytes + buf[data_start+old_off+old_sz:]
 
-buf, data_start, tree, u_node, off, sz, content = parse_asar(target_asar)
+buf, data_start, tree, u_path, u_node, off, sz, content = parse_asar(target_asar)
 has_v1 = HOOK_START in content and HOOK_END in content
 has_legacy = LEGACY_MARKER in content
-has_anchor = find_anchor(content) is not None
+matched_anchor = find_anchor(content)
+has_anchor = matched_anchor is not None
 
 if action == "inspect":
     if not has_anchor:
         sys.exit(2)
     print("PATCHED_V1" if has_v1 else ("PATCHED_LEGACY" if has_legacy else "CLEAN"))
+elif action == "doctor":
+    integ_ok = verify_integrity(buf, data_start, u_node)
+    status = "ANCHOR_MISSING" if not has_anchor else ("PATCHED_V1" if has_v1 else ("PATCHED_LEGACY" if has_legacy else "CLEAN"))
+    print("--- Antigravity Custom Themes Doctor (Python fallback) ---")
+    print(f"Theme Version  : {MANIFEST.get('version')} ({MANIFEST.get('repo')})")
+    print(f"Platform       : {platform.system()}/{platform.machine()} (Python {platform.python_version()})")
+    print(f"ASAR Size      : {len(buf)} bytes (sha256:{hashlib.sha256(buf).hexdigest()[:16]}...)")
+    print(f"Utils Entry    : {u_path} ({sz} bytes)")
+    print(f"Patch Status   : {status}")
+    print(f"Matched Anchor : {matched_anchor or '<NONE>'}")
+    print(f"Integrity OK   : {integ_ok}")
+    print("----------------------------------------------------------")
+    sys.exit(0 if (has_anchor and integ_ok) else 2)
 elif action == "verify-patched":
-    if has_v1 and has_anchor and "_ctCandidates" in content:
+    if has_v1 and has_anchor and "_ctCandidates" in content and verify_integrity(buf, data_start, u_node):
         print("VERIFY_OK")
         sys.exit(0)
     sys.exit(1)
 elif action == "verify-clean":
-    if not has_v1 and not has_legacy and has_anchor:
+    if not has_v1 and not has_legacy and has_anchor and verify_integrity(buf, data_start, u_node):
         print("CLEAN_OK")
         sys.exit(0)
     sys.exit(1)
@@ -708,10 +521,10 @@ elif action == "strip":
     print("STRIP_OK")
 elif action == "inject":
     clean_u = strip_hooks(content)
-    matched_anchor = find_anchor(clean_u)
-    if not matched_anchor:
+    anchor_to_use = find_anchor(clean_u)
+    if not anchor_to_use:
         raise RuntimeError("未找到注入锚点（loadHubWindowUrl / win.loadURL）")
-    new_u = clean_u.replace(matched_anchor, matched_anchor + HOOK_BLOCK, 1)
+    new_u = clean_u.replace(anchor_to_use, anchor_to_use + HOOK_BLOCK, 1)
     out = rebuild_asar(buf, data_start, tree, u_node, off, sz, new_u)
     with open(output_asar, "wb") as f:
         f.write(out)
@@ -719,6 +532,31 @@ elif action == "inject":
 PY_EOF
     fi
 }
+
+# ---------- 只读诊断模式 (--doctor) ----------
+if [ "$MODE" = "doctor" ]; then
+    APP_VER="unknown"
+    PLIST_PATH="${APP_PATH}/Contents/Info.plist"
+    if [ -f "$PLIST_PATH" ] && command -v defaults >/dev/null 2>&1; then
+        APP_VER="$(defaults read "$PLIST_PATH" CFBundleShortVersionString 2>/dev/null || echo "unknown")"
+    fi
+    info "Antigravity Version: ${APP_VER} | Runtime: ${NODE_BIN}"
+    run_asar_engine doctor "$ASAR_PATH"
+    exit $?
+fi
+
+# ---------- 目录写权限检查与按需 sudo 提权 ----------
+if [ ! -w "$RES_DIR" ] || [ ! -w "$ASAR_PATH" ]; then
+    if [ "${EUID:-$(id -u)}" -ne 0 ]; then
+        if [ "$NON_INTERACTIVE" -eq 1 ]; then
+            die "目标目录没有写权限 (${RES_DIR})，请使用 sudo 运行或修改目录权限。"
+        fi
+        warn "目标应用目录 (${RES_DIR}) 需要管理员权限写入，正在请求 sudo 授权..."
+        exec sudo -E bash "$0" "$@"
+    else
+        die "无法写入目标文件: ${ASAR_PATH} (请检查 SIP 或文件系统只读状态)"
+    fi
+fi
 
 # ---------- 检测并优雅关闭运行中的 Antigravity 进程 ----------
 WAS_RUNNING=0
@@ -830,7 +668,7 @@ if [ "$MODE" = "uninstall" ]; then
 fi
 
 # ---------- 安装流程：1) 预检 app.asar ----------
-ASAR_STATE="$(run_asar_engine inspect "$ASAR_PATH")" || die "解析 app.asar 失败或未找到注入锚点（客户端结构可能已变化），已取消修改。"
+ASAR_STATE="$(run_asar_engine inspect "$ASAR_PATH")" || die "解析 app.asar 失败或未找到注入锚点（客户端结构可能已变化，可运行 ./install.sh --doctor 查看诊断信息），已取消修改。"
 
 # ---------- 安装流程：2) 原厂备份与逆向剥离自愈 ----------
 mkdir -p "$BACKUP_DIR"
@@ -853,7 +691,6 @@ if [ "$ASAR_STATE" = "CLEAN" ]; then
         ok "已备份原版 app.asar -> ${BACKUP_PATH}"
     fi
 else
-    # 当前 app.asar 已含钩子：检查备份是否存在且纯净，若缺失则执行逆向剥离自愈生成原厂备份
     NEED_HEAL=0
     if [ ! -f "$BACKUP_PATH" ]; then
         NEED_HEAL=1
@@ -919,7 +756,7 @@ fi
 
 echo ""
 printf "${C_CYAN}================ 安装完成 ================${C_RESET}\n"
-echo " 启动或重启 Antigravity，点击右上角胶囊按钮即可切换 10 款主题。"
+echo " 启动或重启 Antigravity，点击右上角主题按钮即可切换 12 款极光毛玻璃主题。"
 echo " 卸载方式：双击 uninstall.command 或运行 ./install.sh --uninstall"
 printf "${C_CYAN}==========================================${C_RESET}\n"
 

@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify:
+    name: Verify (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Run cross-platform ASAR patcher & installer test suite
+        run: node tests/test-asar-patcher.mjs
+
+      - name: Lint shell scripts (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          bash -n install.sh
+          bash -n install.command
+          bash -n uninstall.command
+          bash -n "检查更新.command"
+          if command -v shellcheck >/dev/null 2>&1; then
+            shellcheck -S warning install.sh
+          fi
+
+      - name: Check PowerShell syntax (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile("$PWD/install.ps1", [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors -and $errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.ToString() }
+            exit 1
+          }
+          Write-Host "[OK] install.ps1 AST syntax check passed."

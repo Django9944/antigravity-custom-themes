@@ -1,0 +1,19 @@
+{
+  "name": "antigravity-custom-themes",
+  "version": "v2.3.3",
+  "repo": "Django9944/antigravity-custom-themes",
+  "upstreamRepo": "MCRYII/antigravity-custom-themes",
+  "hookVersion": "v1",
+  "hookStartMarker": "/* === Antigravity Custom Theme Hook v1 === */",
+  "hookEndMarker": "/* === End Antigravity Custom Theme Hook === */",
+  "legacyMarker": "custom-theme injection hook",
+  "anchors": [
+    "void loadHubWindowUrl(win, url, { skipBootstrapMint });",
+    "void win.loadURL(url);"
+  ],
+  "anchorFallbackRegex": "void\\s+(?:loadHubWindowUrl\\s*\\(\\s*win\\s*,[^;]*|win\\.loadURL\\s*\\([^;]*)\\)\\s*;",
+  "payloads": [
+    "current.css",
+    "current.js"
+  ]
+}

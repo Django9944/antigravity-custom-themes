@@ -1,0 +1,62 @@
+name: Upstream Watch
+
+on:
+  schedule:
+    # Every Monday at 01:00 UTC (09:00 UTC+8)
+    - cron: '0 1 * * 1'
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  check-upstream:
+    name: Check MCRYII/antigravity-custom-themes updates
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Query upstream latest release & main HEAD
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          UPSTREAM="$(node -e "console.log(require('./manifest.json').upstreamRepo)")"
+          LATEST_RELEASE="$(gh api "repos/${UPSTREAM}/releases/latest" --jq '{tag: .tag_name, url: .html_url, date: .published_at}' 2>/dev/null || echo '{}')"
+          LATEST_COMMIT="$(gh api "repos/${UPSTREAM}/commits?per_page=1" --jq '.[0] | {sha: .sha[0:7], date: .commit.author.date, msg: (.commit.message | split("\n")[0]), url: .html_url}' 2>/dev/null || echo '{}')"
+
+          REL_TAG="$(printf '%s' "$LATEST_RELEASE" | node -e "const d = JSON.parse(require('fs').readFileSync(0,'utf8')||'{}'); console.log(d.tag || 'none')")"
+          REL_URL="$(printf '%s' "$LATEST_RELEASE" | node -e "const d = JSON.parse(require('fs').readFileSync(0,'utf8')||'{}'); console.log(d.url || '')")"
+          REL_DATE="$(printf '%s' "$LATEST_RELEASE" | node -e "const d = JSON.parse(require('fs').readFileSync(0,'utf8')||'{}'); console.log(d.date || '')")"
+
+          SHA="$(printf '%s' "$LATEST_COMMIT" | node -e "const d = JSON.parse(require('fs').readFileSync(0,'utf8')||'{}'); console.log(d.sha || 'unknown')")"
+          CMT_DATE="$(printf '%s' "$LATEST_COMMIT" | node -e "const d = JSON.parse(require('fs').readFileSync(0,'utf8')||'{}'); console.log(d.date || '')")"
+          CMT_MSG="$(printf '%s' "$LATEST_COMMIT" | node -e "const d = JSON.parse(require('fs').readFileSync(0,'utf8')||'{}'); console.log(d.msg || '')")"
+          CMT_URL="$(printf '%s' "$LATEST_COMMIT" | node -e "const d = JSON.parse(require('fs').readFileSync(0,'utf8')||'{}'); console.log(d.url || '')")"
+
+          MARKER="upstream-state:${REL_TAG}:${SHA}"
+          TITLE="[Upstream Watch] ${UPSTREAM}"
+          BODY=$(cat <<EOF
+          <!-- ${MARKER} -->
+          定期巡检检测到上游仓库 **${UPSTREAM}** 的最新状态：
+
+          - **最新 Release**: \`${REL_TAG}\` (${REL_DATE}) ${REL_URL}
+          - **最新 Main Commit**: [\`${SHA}\`](${CMT_URL}) (${CMT_DATE}) — ${CMT_MSG}
+
+          请评估是否需要将上游的锚点适配或样式修复同步至本仓库。
+          EOF
+          )
+
+          EXISTING_NUM="$(gh issue list --state open --search "\"${TITLE}\" in:title" --json number,title --jq ".[] | select(.title == \"${TITLE}\") | .number" | head -n1)"
+          if [ -n "$EXISTING_NUM" ]; then
+            EXISTING_BODY="$(gh issue view "$EXISTING_NUM" --json body --jq '.body')"
+            if printf '%s' "$EXISTING_BODY" | grep -Fq "$MARKER"; then
+              echo "Upstream unchanged (${MARKER}), skipping update."
+              exit 0
+            fi
+            gh issue edit "$EXISTING_NUM" --body "$BODY"
+            gh issue comment "$EXISTING_NUM" --body "检测到上游新增变更：Release \`${REL_TAG}\` / Commit [\`${SHA}\`](${CMT_URL}) — ${CMT_MSG}"
+          else
+            gh issue create --title "$TITLE" --body "$BODY"
+          fi

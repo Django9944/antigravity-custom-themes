@@ -1,0 +1,113 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v2.3.3; defaults to manifest.json version)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build & Publish Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Run full test suite before release
+        run: node tests/test-asar-patcher.mjs
+
+      - name: Resolve and validate version tag
+        id: meta
+        run: |
+          MANIFEST_VER="$(node -e "console.log(require('./manifest.json').version)")"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+            [ -n "$TAG" ] || TAG="$MANIFEST_VER"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "manifest_ver=${MANIFEST_VER}" >> "$GITHUB_OUTPUT"
+          if [ "$TAG" != "$MANIFEST_VER" ]; then
+            echo "::warning::Release tag ($TAG) differs from manifest.json version ($MANIFEST_VER)"
+          fi
+
+      - name: Package macOS, Windows, and Universal archives
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          mkdir -p dist/stage-macos dist/stage-windows dist/stage-universal
+
+          # Common core files
+          COMMON_FILES=(
+            "LICENSE"
+            "README.md"
+            "README_EN.md"
+            "manifest.json"
+            "current.css"
+            "current.js"
+            "core"
+          )
+
+          # macOS package (preserve +x permissions)
+          for item in "${COMMON_FILES[@]}" install.sh install.command uninstall.command "检查更新.command"; do
+            cp -R "$item" dist/stage-macos/
+          done
+          chmod +x dist/stage-macos/install.sh dist/stage-macos/*.command
+
+          # Windows package
+          for item in "${COMMON_FILES[@]}" install.ps1 install.bat uninstall.bat "检查更新.bat"; do
+            cp -R "$item" dist/stage-windows/
+          done
+
+          # Universal package
+          for item in "${COMMON_FILES[@]}" install.sh install.command uninstall.command "检查更新.command" install.ps1 install.bat uninstall.bat "检查更新.bat"; do
+            cp -R "$item" dist/stage-universal/
+          done
+          chmod +x dist/stage-universal/install.sh dist/stage-universal/*.command
+
+          (cd dist/stage-macos && zip -rq "../antigravity-custom-themes-${TAG}-macos.zip" .)
+          (cd dist/stage-windows && zip -rq "../antigravity-custom-themes-${TAG}-windows.zip" .)
+          (cd dist/stage-universal && zip -rq "../antigravity-custom-themes-${TAG}-universal.zip" .)
+
+          (cd dist && sha256sum antigravity-custom-themes-${TAG}-*.zip > SHA256SUMS.txt)
+          ls -lh dist/antigravity-custom-themes-${TAG}-*.zip dist/SHA256SUMS.txt
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" \
+              "dist/antigravity-custom-themes-${TAG}-macos.zip" \
+              "dist/antigravity-custom-themes-${TAG}-windows.zip" \
+              "dist/antigravity-custom-themes-${TAG}-universal.zip" \
+              "dist/SHA256SUMS.txt" \
+              --clobber
+          else
+            gh release create "$TAG" \
+              "dist/antigravity-custom-themes-${TAG}-macos.zip" \
+              "dist/antigravity-custom-themes-${TAG}-windows.zip" \
+              "dist/antigravity-custom-themes-${TAG}-universal.zip" \
+              "dist/SHA256SUMS.txt" \
+              --title "Antigravity Custom Themes ${TAG}" \
+              --generate-notes
+          fi
