@@ -310,10 +310,21 @@ const fs = require('fs');
 const crypto = require('crypto');
 
 const [action, targetAsar, outputAsar] = process.argv.slice(2);
-const ANCHOR = 'void win.loadURL(url);';
+const ANCHORS = [
+    'void loadHubWindowUrl(win, url, { skipBootstrapMint });',
+    'void win.loadURL(url);',
+];
 const HOOK_START = '/* === Antigravity Custom Theme Hook v1 === */';
 const HOOK_END = '/* === End Antigravity Custom Theme Hook === */';
 const LEGACY_MARKER = 'custom-theme injection hook';
+
+function findAnchor(text) {
+    for (const a of ANCHORS) {
+        if (text.includes(a)) return a;
+    }
+    const m = text.match(/void\s+(?:loadHubWindowUrl\s*\(\s*win\s*,[^;]*|win\.loadURL\s*\([^;]*)\)\s*;/);
+    return m ? m[0] : null;
+}
 
 const HOOK_BLOCK = `
 /* === Antigravity Custom Theme Hook v1 === */
@@ -486,7 +497,7 @@ try {
     const parsed = parseAsar(targetAsar);
     const hasV1Hook = parsed.content.includes(HOOK_START) && parsed.content.includes(HOOK_END);
     const hasLegacyHook = parsed.content.includes(LEGACY_MARKER);
-    const hasAnchor = parsed.content.includes(ANCHOR);
+    const hasAnchor = Boolean(findAnchor(parsed.content));
 
     if (action === 'inspect') {
         if (!hasAnchor) {
@@ -545,10 +556,11 @@ try {
     if (action === 'inject') {
         if (!outputAsar) throw new Error('inject 需要提供输出文件路径');
         const cleanUtils = stripHooksFromText(parsed.content);
-        if (!cleanUtils.includes(ANCHOR)) {
-            throw new Error('未找到注入锚点 void win.loadURL(url);');
+        const matchedAnchor = findAnchor(cleanUtils);
+        if (!matchedAnchor) {
+            throw new Error('未找到注入锚点（loadHubWindowUrl / win.loadURL）');
         }
-        const newUtils = cleanUtils.replace(ANCHOR, ANCHOR + HOOK_BLOCK);
+        const newUtils = cleanUtils.replace(matchedAnchor, matchedAnchor + HOOK_BLOCK);
         const outBuf = rebuildAsarWithNewUtils(parsed, newUtils);
         fs.writeFileSync(outputAsar, outBuf);
         const check = parseAsar(outputAsar);
@@ -573,10 +585,20 @@ action = sys.argv[1]
 target_asar = sys.argv[2]
 output_asar = sys.argv[3] if len(sys.argv) > 3 else ""
 
-ANCHOR = "void win.loadURL(url);"
+ANCHORS = [
+    "void loadHubWindowUrl(win, url, { skipBootstrapMint });",
+    "void win.loadURL(url);",
+]
 HOOK_START = "/* === Antigravity Custom Theme Hook v1 === */"
 HOOK_END = "/* === End Antigravity Custom Theme Hook === */"
 LEGACY_MARKER = "custom-theme injection hook"
+
+def find_anchor(text):
+    for a in ANCHORS:
+        if a in text:
+            return a
+    m = re.search(r"void\s+(?:loadHubWindowUrl\s*\(\s*win\s*,[^;]*|win\.loadURL\s*\([^;]*)\)\s*;", text)
+    return m.group(0) if m else None
 
 HOOK_BLOCK = """
 /* === Antigravity Custom Theme Hook v1 === */
@@ -662,7 +684,7 @@ def rebuild_asar(buf, data_start, tree, u_node, old_off, old_sz, new_str):
 buf, data_start, tree, u_node, off, sz, content = parse_asar(target_asar)
 has_v1 = HOOK_START in content and HOOK_END in content
 has_legacy = LEGACY_MARKER in content
-has_anchor = ANCHOR in content
+has_anchor = find_anchor(content) is not None
 
 if action == "inspect":
     if not has_anchor:
@@ -686,7 +708,10 @@ elif action == "strip":
     print("STRIP_OK")
 elif action == "inject":
     clean_u = strip_hooks(content)
-    new_u = clean_u.replace(ANCHOR, ANCHOR + HOOK_BLOCK, 1)
+    matched_anchor = find_anchor(clean_u)
+    if not matched_anchor:
+        raise RuntimeError("未找到注入锚点（loadHubWindowUrl / win.loadURL）")
+    new_u = clean_u.replace(matched_anchor, matched_anchor + HOOK_BLOCK, 1)
     out = rebuild_asar(buf, data_start, tree, u_node, off, sz, new_u)
     with open(output_asar, "wb") as f:
         f.write(out)

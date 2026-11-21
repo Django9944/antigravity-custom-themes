@@ -16,7 +16,11 @@ $LegacyMarker    = 'custom-theme injection hook'
 $HookVersion     = 'v1'
 $HookStartMarker = "/* === Antigravity Custom Theme Hook $HookVersion === */"
 $HookEndMarker   = "/* === End Antigravity Custom Theme Hook === */"
-$Anchor          = "void win.loadURL(url);"
+$Anchors         = @(
+    "void loadHubWindowUrl(win, url, { skipBootstrapMint });",
+    "void win.loadURL(url);"
+)
+$AnchorFallbackRegex = 'void\s+(?:loadHubWindowUrl\s*\(\s*win\s*,[^;]*|win\.loadURL\s*\([^;]*)\)\s*;'
 $Payloads        = @('current.css', 'current.js')
 $CurrentVersion  = 'v2.3.2'
 $Repo            = 'MCRYII/antigravity-custom-themes'
@@ -25,6 +29,20 @@ $ReleasesUrl     = "https://github.com/$Repo/releases/latest"
 function Die([string]$msg) { Write-Host "[X] $msg" -ForegroundColor Red; exit 1 }
 function Ok([string]$msg)  { Write-Host "[OK] $msg" -ForegroundColor Green }
 $hex = { param($b) ([System.BitConverter]::ToString($b)).Replace('-', '').ToLower() }
+
+function Find-HookAnchor([string]$Text) {
+    if (-not $Text) { return $null }
+    foreach ($candidate in $Anchors) {
+        if ($Text.Contains($candidate)) {
+            return $candidate
+        }
+    }
+    $m = [regex]::Match($Text, $AnchorFallbackRegex)
+    if ($m.Success) {
+        return $m.Value
+    }
+    return $null
+}
 
 # ---------- 统一 ASAR 解析与条目查找 ----------
 function ConvertFrom-AsarJson([string]$Json) {
@@ -528,7 +546,7 @@ $entry = $null; $utils = $null
 $hasLatestHook = $false; $hasLegacyHook = $false
 foreach ($e in $entries) {
     $content = [System.Text.Encoding]::UTF8.GetString($hdr.Bytes, [int]($hdr.DataStart + $e.Offset), $e.Size)
-    if ($content.Contains($Anchor)) {
+    if (Find-HookAnchor $content) {
         $entry = $e; $utils = $content
         if ($utils.Contains($HookStartMarker) -and $utils.Contains('_ctCandidates') -and $utils.Contains("require('path')")) {
             $hasLatestHook = $true
@@ -586,9 +604,10 @@ if ($skipPatch) {
         Die "无法在 asar 头部 JSON 中定位目标 utils.js 条目边界，已取消修改"
     }
 
-    $anchorIdx = $utils.IndexOf($Anchor)
+    $matchedAnchor = Find-HookAnchor $utils
+    $anchorIdx = if ($matchedAnchor) { $utils.IndexOf($matchedAnchor) } else { -1 }
     if ($anchorIdx -lt 0) { Die "未找到代码注入锚点，已取消修改" }
-    $insertAt = $anchorIdx + $Anchor.Length
+    $insertAt = $anchorIdx + $matchedAnchor.Length
 
     $hook = @"
 
@@ -670,7 +689,7 @@ try {
         $tmpVerified = $false
         foreach ($ve in $vEntries) {
             $vContent = [System.Text.Encoding]::UTF8.GetString($vHdr.Bytes, [int]($vHdr.DataStart + $ve.Offset), $ve.Size)
-            if (-not $vContent.Contains($HookStartMarker) -or -not $vContent.Contains($Anchor)) { continue }
+            if (-not $vContent.Contains($HookStartMarker) -or -not (Find-HookAnchor $vContent)) { continue }
             if (Test-AsarBytesIntegrity -Header $vHdr -Entry $ve) {
                 $tmpVerified = $true
                 break
