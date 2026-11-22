@@ -2,6 +2,22 @@
 
 All notable changes to **Antigravity Custom Themes** are documented in this file.
 
+## [v2.4.1] - 2026-11-23
+
+### ⚡ 性能优化 (Performance)
+- **消除滚动重绘阻塞与吸顶色带断层（PR #2 by `@xiu-cpu` + `127fa58`）**：
+  - 移除 `html`、`.bg-sidebar` 及 3 类吸顶容器上的 `background-attachment: fixed`，恢复 Chromium GPU 硬件滚动合成。
+  - 将吸顶容器背景从视口级渐变改为 `color-mix` 高不透明度纯色底衬，消除晴空/落日/绯樱/暮紫等浅色主题下的色带断层。
+- **按平台精准降级 `backdrop-filter` 与透字补偿**：
+  - 通过 `html[data-ag-platform="win"]` 仅在 Windows 端关闭滚动区上方浮层（聊天输入框、语音浮层、吸顶卡片等）的实时高斯模糊，并同步提升背景不透明度至 `0.92 ~ 0.96` 防止文字锐利透出；完整保留 macOS 端毛玻璃质感与静态顶栏效果。
+- **消除高频 DOM 变更强制回流**：
+  - 为 `mountThemeSelector()` 增加零回流快速返回路径，避免滚动与流式输出期间重复调用 `getBoundingClientRect()`；为 `MutationObserver` 增加 `80ms` 节流并保留主题切换与模态标题栏的即时同步。
+
+### 🧪 测试与工程 (Tests)
+- 在 `tests/test-asar-patcher.mjs` 新增嵌入式 CSS 括号配平、禁用 `fixed` 滚动陷阱、吸顶防断层及 Windows 平台作用域回归校验。
+
+---
+
 ## [v2.4.0] - 2026-11-21
 
 ### ✨ 新增特性 (Features)
