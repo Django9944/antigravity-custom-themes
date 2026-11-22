@@ -230,6 +230,83 @@ try {
         assert.ok(css.includes('html[data-ag-custom-theme]'), 'current.css must scope styles under html[data-ag-custom-theme]');
     });
 
+    test('current.js embedded CSS has balanced braces, no fixed-attachment scroll traps, and Windows-scoped blur degradation', () => {
+        const js = fs.readFileSync(path.join(ROOT, 'current.js'), 'utf8');
+        const jsLines = js.split(/\r?\n/);
+        const baseLine = jsLines.find((l) => l.trimStart().startsWith('const BASE_CSS = '));
+        const darkLine = jsLines.find((l) => l.trimStart().startsWith('const DARK_DELTA_CSS = '));
+        assert.ok(baseLine, 'current.js must define BASE_CSS');
+        assert.ok(darkLine, 'current.js must define DARK_DELTA_CSS');
+
+        const baseCss = JSON.parse(baseLine.trim().replace(/^const BASE_CSS = /, '').replace(/;$/, ''));
+        const darkCss = JSON.parse(darkLine.trim().replace(/^const DARK_DELTA_CSS = /, '').replace(/;$/, ''));
+
+        const winLightMatch = js.match(/const WIN_PERF_CSS = `([\s\S]*?)`\.trim\(\);/);
+        const winDarkMatch = js.match(/const WIN_PERF_DARK_CSS = `([\s\S]*?)`\.trim\(\);/);
+        assert.ok(winLightMatch, 'current.js must define WIN_PERF_CSS');
+        assert.ok(winDarkMatch, 'current.js must define WIN_PERF_DARK_CSS');
+
+        const winLightCss = winLightMatch[1].trim();
+        const winDarkCss = winDarkMatch[1].trim();
+
+        for (const [label, cssText] of [
+            ['BASE_CSS', baseCss],
+            ['DARK_DELTA_CSS', darkCss],
+            ['WIN_PERF_CSS', winLightCss],
+            ['WIN_PERF_DARK_CSS', winDarkCss]
+        ]) {
+            const opens = (cssText.match(/\{/g) || []).length;
+            const closes = (cssText.match(/\}/g) || []).length;
+            assert.equal(opens, closes, `${label} unbalanced braces: {=${opens}, }=${closes}`);
+        }
+
+        assert.ok(!/background-attachment\s*:\s*fixed/i.test(baseCss), 'BASE_CSS must not use background-attachment: fixed');
+        assert.ok(!/background-attachment\s*:\s*fixed/i.test(darkCss), 'DARK_DELTA_CSS must not use background-attachment: fixed');
+
+        for (const [label, cssText] of [['BASE_CSS', baseCss], ['DARK_DELTA_CSS', darkCss]]) {
+            for (const block of cssText.split('}')) {
+                const selector = block.split('{')[0] || '';
+                if (selector.includes('sticky')) {
+                    assert.ok(
+                        !block.includes('var(--ag-mesh)') && !block.includes('var(--sidebar-unified-bg)'),
+                        `${label} sticky block must not paint viewport mesh/sidebar-unified-bg: ${selector.trim()}`
+                    );
+                }
+            }
+        }
+
+        assert.ok(baseCss.includes('backdrop-filter: blur('), 'BASE_CSS must retain macOS backdrop-filter blur rules');
+
+        for (const [label, cssText] of [['WIN_PERF_CSS', winLightCss], ['WIN_PERF_DARK_CSS', winDarkCss]]) {
+            for (const block of cssText.split('}')) {
+                const selectorList = (block.split('{')[0] || '').trim();
+                if (!selectorList) continue;
+                const selectors = [];
+                let depth = 0;
+                let start = 0;
+                for (let i = 0; i < selectorList.length; i++) {
+                    const ch = selectorList[i];
+                    if (ch === '(' || ch === '[') depth++;
+                    else if ((ch === ')' || ch === ']') && depth > 0) depth--;
+                    else if (ch === ',' && depth === 0) {
+                        selectors.push(selectorList.slice(start, i));
+                        start = i + 1;
+                    }
+                }
+                selectors.push(selectorList.slice(start));
+                for (const sel of selectors) {
+                    assert.ok(
+                        sel.trim().startsWith('html[data-ag-platform="win"]'),
+                        `${label} selector must be scoped under html[data-ag-platform="win"]: ${sel.trim()}`
+                    );
+                }
+            }
+        }
+
+        assert.ok(js.includes("setAttribute('data-ag-platform'"), 'current.js must set data-ag-platform for active themes');
+        assert.ok(js.includes("removeAttribute('data-ag-platform'"), 'current.js must remove data-ag-platform in stock mode');
+    });
+
     test('install.sh uses LF line endings and references Django9944/core/asar-patcher.js', () => {
         const sh = fs.readFileSync(path.join(ROOT, 'install.sh'), 'utf8');
         assert.ok(!sh.includes('\r\n'), 'install.sh must use LF line endings for macOS compatibility');
