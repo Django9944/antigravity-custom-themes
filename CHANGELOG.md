@@ -2,6 +2,13 @@
 
 All notable changes to **Antigravity Custom Themes** are documented in this file.
 
+## [v2.4.2] - 2026-11-26
+
+### ✨ 宿主升级自动同步与兼容验证 (Automated Host Sync)
+- **宿主版本兼容认证**：云端自动提取官方 Antigravity `2.35.2` (`2.35.2-4585983447007232`) 真实 `app.asar` 完成注入、分块哈希与字节级剥离回归验证（命中锚点：`void loadHubWindowUrl(win, url, { skipBootstrapMint });`）。
+
+---
+
 ## [v2.4.1] - 2026-11-23
 
 ### ⚡ 性能优化 (Performance)
