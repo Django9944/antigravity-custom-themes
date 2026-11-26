@@ -7,22 +7,30 @@ on:
   workflow_dispatch:
     inputs:
       force_verify_asar:
-        description: 'Download official Antigravity.zip and run real app.asar injection/strip test even if version unchanged'
+        description: 'Download official Antigravity.zip and run real app.asar test even if version unchanged'
+        required: false
+        type: boolean
+        default: false
+      force_auto_release:
+        description: 'Force bump version, commit, and publish a new GitHub Release even if host version unchanged'
         required: false
         type: boolean
         default: false
 
 permissions:
+  contents: write
   issues: write
 
 jobs:
   watch-antigravity:
-    name: Monitor Official Antigravity Releases & Verify ASAR Compatibility
+    name: Monitor Official Antigravity Releases, Auto-Sync & Publish Release
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -37,9 +45,11 @@ jobs:
           LATEST_VER="$(node -e "console.log(require('./probe.json').latestHostVersion)")"
           BUILD_ID="$(node -e "console.log(require('./probe.json').buildId)")"
           IS_NEW="$(node -e "console.log(require('./probe.json').isNewHostVersion ? 'true' : 'false')")"
+          MAC_URL="$(node -e "console.log(require('./probe.json').platforms?.mac_arm64?.url || '')")"
           echo "latest_ver=${LATEST_VER}" >> "$GITHUB_OUTPUT"
           echo "build_id=${BUILD_ID}" >> "$GITHUB_OUTPUT"
           echo "is_new=${IS_NEW}" >> "$GITHUB_OUTPUT"
+          echo "mac_url=${MAC_URL}" >> "$GITHUB_OUTPUT"
 
       - name: Check existing tracking Issue state
         id: issue_state
@@ -60,23 +70,73 @@ jobs:
           echo "issue_num=${EXISTING_NUM}" >> "$GITHUB_OUTPUT"
           echo "already_tracked=${ALREADY_TRACKED}" >> "$GITHUB_OUTPUT"
 
-      - name: Download official Antigravity.zip & run real app.asar injection test
-        id: verify_asar
-        if: steps.probe.outputs.is_new == 'true' || steps.issue_state.outputs.already_tracked == 'false' || github.event.inputs.force_verify_asar == 'true'
+      - name: Download official Antigravity.zip, verify/auto-adapt ASAR, and auto-release on new host version
+        id: sync_release
+        if: steps.probe.outputs.is_new == 'true' || steps.issue_state.outputs.already_tracked == 'false' || github.event.inputs.force_verify_asar == 'true' || github.event.inputs.force_auto_release == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LATEST_VER: ${{ steps.probe.outputs.latest_ver }}
+          BUILD_ID: ${{ steps.probe.outputs.build_id }}
+          MAC_URL: ${{ steps.probe.outputs.mac_url }}
+          IS_NEW: ${{ steps.probe.outputs.is_new }}
+          FORCE_RELEASE: ${{ github.event.inputs.force_auto_release }}
         run: |
+          TMP_MAC="$(mktemp -d)"
+          curl -sSL --max-time 180 -o "${TMP_MAC}/Antigravity.zip" "$MAC_URL"
+          unzip -q "${TMP_MAC}/Antigravity.zip" "*/Contents/Resources/app.asar" -d "$TMP_MAC"
+          REAL_ASAR="${TMP_MAC}/Antigravity.app/Contents/Resources/app.asar"
+
+          if [ "$IS_NEW" = "true" ] || [ "$FORCE_RELEASE" = "true" ]; then
+            set +e
+            node scripts/auto-sync-host-release.mjs --asar "$REAL_ASAR" --host-version "$LATEST_VER" --build-id "$BUILD_ID" > sync-result.json
+            SYNC_EXIT=$?
+            set -e
+            cat sync-result.json
+
+            if [ "$SYNC_EXIT" -eq 0 ]; then
+              NEW_TAG="$(node -e "console.log(require('./sync-result.json').newThemeVersion)")"
+              AUTO_ADAPTED="$(node -e "console.log(require('./sync-result.json').autoAdapted ? 'true' : 'false')")"
+              node tests/test-asar-patcher.mjs
+
+              git config user.name "github-actions[bot]"
+              git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+              git add manifest.json current.js CHANGELOG.md
+              git commit -m "chore(release): auto-sync compatibility for Antigravity ${LATEST_VER} (${NEW_TAG})"
+              git tag -fa "$NEW_TAG" -m "Release ${NEW_TAG}: auto-synced for Antigravity ${LATEST_VER}"
+              git push origin main
+              git push -f origin "$NEW_TAG"
+
+              bash scripts/package-release.sh "$NEW_TAG"
+              gh release create "$NEW_TAG" \
+                "dist/antigravity-custom-themes-${NEW_TAG}-macos.zip" \
+                "dist/antigravity-custom-themes-${NEW_TAG}-windows.zip" \
+                "dist/antigravity-custom-themes-${NEW_TAG}-universal.zip" \
+                "dist/SHA256SUMS.txt" \
+                --title "${NEW_TAG} — 自动同步适配 Antigravity ${LATEST_VER}" \
+                --notes-file dist/RELEASE_NOTES.md \
+                --latest
+
+              echo "new_tag=${NEW_TAG}" >> "$GITHUB_OUTPUT"
+              echo "auto_adapted=${AUTO_ADAPTED}" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
           set +e
-          node scripts/check-antigravity-upstream.mjs --json --verify-remote-asar > verified.json
-          EXIT_CODE=$?
+          node scripts/check-antigravity-upstream.mjs --json --verify-local-asar "$REAL_ASAR" > verified.json
+          VERIFY_EXIT=$?
           set -e
+          rm -rf "$TMP_MAC"
           cat verified.json
-          echo "verify_exit=${EXIT_CODE}" >> "$GITHUB_OUTPUT"
+          echo "verify_exit=${VERIFY_EXIT}" >> "$GITHUB_OUTPUT"
 
       - name: Create or update compatibility tracking Issue
-        if: steps.probe.outputs.is_new == 'true' || steps.issue_state.outputs.already_tracked == 'false' || github.event.inputs.force_verify_asar == 'true'
+        if: steps.probe.outputs.is_new == 'true' || steps.issue_state.outputs.already_tracked == 'false' || github.event.inputs.force_verify_asar == 'true' || github.event.inputs.force_auto_release == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE_NUM: ${{ steps.issue_state.outputs.issue_num }}
           ALREADY_TRACKED: ${{ steps.issue_state.outputs.already_tracked }}
+          NEW_TAG: ${{ steps.sync_release.outputs.new_tag }}
+          AUTO_ADAPTED: ${{ steps.sync_release.outputs.auto_adapted }}
         run: |
           TITLE="[Antigravity Watch] Official IDE Update & Compatibility Status"
           BODY="$(node -e "
@@ -84,7 +144,14 @@ jobs:
             const v = d.asarVerification || {};
             const doc = v.doctor || {};
             const ok = Boolean(v.compatible);
-            const badge = ok ? '✅ COMPATIBLE (真实 app.asar 注入 & 字节级剥离校验通过)' : '❌ INCOMPATIBLE (注入锚点或结构变更，需适配 manifest.json)';
+            const newTag = process.env.NEW_TAG || '';
+            const autoAdapted = process.env.AUTO_ADAPTED === 'true';
+            const badge = ok
+              ? (autoAdapted ? '✅ AUTO-ADAPTED & RELEASED (自动探测新锚点并发版通过)' : '✅ COMPATIBLE (真实 app.asar 注入 & 字节级剥离校验通过)')
+              : '❌ INCOMPATIBLE (注入锚点或结构大幅变更，需人工适配 manifest.json)';
+            const relLine = newTag
+              ? '| **自动发布主题版本** | [' + newTag + '](https://github.com/Django9944/antigravity-custom-themes/releases/tag/' + newTag + ') |'
+              : '';
             const hints = Array.isArray(v.candidateHints) && v.candidateHints.length
               ? '\n### 候选锚点代码片段 (`dist/utils.js`)\n\`\`\`js\n' + v.candidateHints.join('\n') + '\n\`\`\`\n'
               : '';
@@ -96,6 +163,7 @@ jobs:
               '| :--- | :--- |',
               '| **官方最新版本** | \`' + d.latestHostVersion + '\` (build: \`' + d.buildId + '\`) |',
               '| **仓库已登记版本** | \`' + d.verifiedHostVersion + '\` (主题版本: \`' + d.themeVersion + '\`) |',
+              relLine,
               '| **真实 ASAR 兼容性** | ' + badge + ' |',
               '| **命中注入锚点** | \`' + (doc.matchedAnchor || '<NONE>') + '\` |',
               '| **ASAR SHA256 (前16位)** | \`' + (doc.asarSha256 || 'N/A') + '...\` (' + (doc.asarSize || 0) + ' bytes) |',
@@ -103,7 +171,7 @@ jobs:
               '| **macOS x64 官方包** | ' + (d.platforms?.mac_x64?.url || 'N/A') + ' |',
               '| **Windows x64 官方包** | ' + (d.platforms?.win_x64?.url || 'N/A') + ' |',
               hints
-            ].join('\n'));
+            ].filter(Boolean).join('\n'));
           ")"
 
           COMPAT="$(node -e "console.log(require('./verified.json').asarVerification?.compatible ? 'true' : 'false')")"
@@ -112,8 +180,10 @@ jobs:
 
           if [ -n "$ISSUE_NUM" ]; then
             gh issue edit "$ISSUE_NUM" --body "$BODY"
-            if [ "$ALREADY_TRACKED" != "true" ]; then
-              gh issue comment "$ISSUE_NUM" --body "🔔 检测到 Antigravity 官方发布新构建 \`${VER}\` (\`${BUILD}\`)，云端真实 \`app.asar\` 校验结果：**compatible=${COMPAT}**"
+            if [ -n "$NEW_TAG" ]; then
+              gh issue comment "$ISSUE_NUM" --body "🚀 检测到 Antigravity 官方新版本 \`${VER}\` (\`${BUILD}\`)，云端已自动完成兼容性验证、更新仓库并发布新版本 [**${NEW_TAG}**](https://github.com/Django9944/antigravity-custom-themes/releases/tag/${NEW_TAG})！"
+            elif [ "$ALREADY_TRACKED" != "true" ]; then
+              gh issue comment "$ISSUE_NUM" --body "🔔 检测到 Antigravity 官方新构建 \`${VER}\` (\`${BUILD}\`)，云端真实 \`app.asar\` 校验结果：**compatible=${COMPAT}**"
             fi
           else
             gh issue create --title "$TITLE" --body "$BODY"

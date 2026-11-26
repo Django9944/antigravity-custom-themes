@@ -3,7 +3,7 @@
   "version": "v2.4.1",
   "repo": "Django9944/antigravity-custom-themes",
   "hostUpdaterUrl": "https://antigravity-hub-auto-updater-974169037036.us-central1.run.app/manifest",
-  "verifiedHostVersion": "2.34.0",
+  "verifiedHostVersion": "2.35.2",
   "hookVersion": "v1",
   "hookStartMarker": "/* === Antigravity Custom Theme Hook v1 === */",
   "hookEndMarker": "/* === End Antigravity Custom Theme Hook === */",

@@ -11,6 +11,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { parseElectronUpdaterYaml, verifyAsarFile } from '../scripts/check-antigravity-upstream.mjs';
 import { extractChangelogSection, formatConventionalCommits } from '../scripts/generate-release-notes.mjs';
+import { bumpPatchVersion, autoDiscoverAnchor } from '../scripts/auto-sync-host-release.mjs';
 
 const require = createRequire(import.meta.url);
 const __filename = fileURLToPath(import.meta.url);
@@ -141,11 +142,26 @@ try {
             path.join('core', 'updater.js'),
             path.join('scripts', 'check-host-compat.mjs'),
             path.join('scripts', 'check-antigravity-upstream.mjs'),
-            path.join('scripts', 'generate-release-notes.mjs')
+            path.join('scripts', 'generate-release-notes.mjs'),
+            path.join('scripts', 'auto-sync-host-release.mjs')
         ]) {
             const res = spawnSync(process.execPath, ['--check', path.join(ROOT, rel)], { encoding: 'utf8' });
             assert.equal(res.status, 0, `${rel} syntax check failed: ${res.stderr}`);
         }
+    });
+
+    test('scripts/auto-sync-host-release.mjs bumps patch version and auto-discovers drifted anchors', () => {
+        assert.equal(bumpPatchVersion('v2.4.1'), 'v2.4.2');
+        assert.equal(bumpPatchVersion('2.4.9'), 'v2.4.10');
+
+        const existing = ['void loadHubWindowUrl(win, url, { skipBootstrapMint });', 'void win.loadURL(url);'];
+        const sameHit = autoDiscoverAnchor('function f() { void loadHubWindowUrl(win, url, { skipBootstrapMint }); }', existing);
+        assert.equal(sameHit.isNew, false);
+        assert.equal(sameHit.anchor, 'void loadHubWindowUrl(win, url, { skipBootstrapMint });');
+
+        const driftedHit = autoDiscoverAnchor('function f() { await loadHubWindowUrl(win, url, { skipBootstrapMint, newOpt: true }); }', existing);
+        assert.equal(driftedHit.isNew, true);
+        assert.equal(driftedHit.anchor, 'await loadHubWindowUrl(win, url, { skipBootstrapMint, newOpt: true });');
     });
 
     test('CHANGELOG.md and scripts/generate-release-notes.mjs generate structured release descriptions', () => {
