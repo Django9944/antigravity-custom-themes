@@ -295,6 +295,19 @@ function Get-RunningClientProcesses([string]$ResourcesDir) {
     return $matched
 }
 
+function Replace-AsarFile([string]$SourceTmp, [string]$TargetAsar) {
+    try {
+        [System.IO.File]::Replace($SourceTmp, $TargetAsar, $null, $true)
+        return
+    } catch { }
+    try {
+        [System.IO.File]::Copy($SourceTmp, $TargetAsar, $true)
+        Remove-Item -LiteralPath $SourceTmp -Force -ErrorAction SilentlyContinue
+        return
+    } catch { }
+    Move-Item -LiteralPath $SourceTmp -Destination $TargetAsar -Force
+}
+
 function Wait-FileUnlocked([string]$FilePath, [int]$TimeoutMs = 5000) {
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
     while ($sw.ElapsedMilliseconds -lt $TimeoutMs) {
@@ -478,56 +491,57 @@ if ($needsAdmin) {
 $running = @(Get-RunningClientProcesses -ResourcesDir $ResDir)
 if ($running.Count -gt 0) {
     if ($NonInteractive) {
-        Die "检测到 Antigravity 正在运行，非交互模式下无法自动关闭。请先关闭客户端后重试。"
-    }
-    Write-Host "检测到目标目录的 Antigravity 正在运行（$($running.Count) 个进程）。"
-    $ans = Read-Host "自动关闭它并继续？(Y/N)"
-    if ($ans -match '^[Yy]') {
-        foreach ($p in $running) {
-            try {
-                if ($p.MainWindowHandle -ne [IntPtr]::Zero) {
-                    $null = $p.CloseMainWindow()
-                }
-            } catch { }
-        }
-        $ids = @($running | ForEach-Object { $_.Id })
-        $sw = [System.Diagnostics.Stopwatch]::StartNew()
-        $alive = @($running)
-        while ($sw.ElapsedMilliseconds -lt 5000) {
-            $alive = @(Get-Process -Id $ids -ErrorAction SilentlyContinue)
-            if ($alive.Count -eq 0) { break }
-            Start-Sleep -Milliseconds 250
-        }
-        if ($alive.Count -gt 0) {
-            $alive | Stop-Process -Force -ErrorAction SilentlyContinue
-            $sw.Restart()
+        Info "非交互模式 (-NonInteractive)：保持当前运行的 Antigravity 会话不中断，采用原位写入更新 app.asar（下次重启客户端或新建窗口生效）。"
+    } else {
+        Write-Host "检测到目标目录的 Antigravity 正在运行（$($running.Count) 个进程）。"
+        $ans = Read-Host "自动关闭它并继续？(Y/N)"
+        if ($ans -match '^[Yy]') {
+            foreach ($p in $running) {
+                try {
+                    if ($p.MainWindowHandle -ne [IntPtr]::Zero) {
+                        $null = $p.CloseMainWindow()
+                    }
+                } catch { }
+            }
+            $ids = @($running | ForEach-Object { $_.Id })
+            $sw = [System.Diagnostics.Stopwatch]::StartNew()
+            $alive = @($running)
             while ($sw.ElapsedMilliseconds -lt 5000) {
                 $alive = @(Get-Process -Id $ids -ErrorAction SilentlyContinue)
                 if ($alive.Count -eq 0) { break }
                 Start-Sleep -Milliseconds 250
             }
-        }
-        if ($alive.Count -gt 0) {
-            foreach ($p in $alive) {
-                try { & taskkill.exe /F /T /PID $p.Id 2>$null | Out-Null } catch { }
+            if ($alive.Count -gt 0) {
+                $alive | Stop-Process -Force -ErrorAction SilentlyContinue
+                $sw.Restart()
+                while ($sw.ElapsedMilliseconds -lt 5000) {
+                    $alive = @(Get-Process -Id $ids -ErrorAction SilentlyContinue)
+                    if ($alive.Count -eq 0) { break }
+                    Start-Sleep -Milliseconds 250
+                }
             }
-            $sw.Restart()
-            while ($sw.ElapsedMilliseconds -lt 3000) {
-                $alive = @(Get-Process -Id $ids -ErrorAction SilentlyContinue)
-                if ($alive.Count -eq 0) { break }
-                Start-Sleep -Milliseconds 250
+            if ($alive.Count -gt 0) {
+                foreach ($p in $alive) {
+                    try { & taskkill.exe /F /T /PID $p.Id 2>$null | Out-Null } catch { }
+                }
+                $sw.Restart()
+                while ($sw.ElapsedMilliseconds -lt 3000) {
+                    $alive = @(Get-Process -Id $ids -ErrorAction SilentlyContinue)
+                    if ($alive.Count -eq 0) { break }
+                    Start-Sleep -Milliseconds 250
+                }
             }
+            $stillRunning = @(Get-RunningClientProcesses -ResourcesDir $ResDir)
+            if ($stillRunning.Count -gt 0) {
+                Die "关闭 Antigravity 失败（进程仍在运行，PID: $(($stillRunning | ForEach-Object { $_.Id }) -join ', ')），可能需要管理员权限或请手动关闭后重试。"
+            }
+            if (-not (Wait-FileUnlocked -FilePath $AsarPath -TimeoutMs 5000)) {
+                Die "app.asar 文件句柄尚未释放，请稍后或手动关闭相关进程后重试。"
+            }
+            Ok "已关闭 Antigravity"
+        } else {
+            Die "请手动关闭 Antigravity 后重新运行本脚本。"
         }
-        $stillRunning = @(Get-RunningClientProcesses -ResourcesDir $ResDir)
-        if ($stillRunning.Count -gt 0) {
-            Die "关闭 Antigravity 失败（进程仍在运行，PID: $(($stillRunning | ForEach-Object { $_.Id }) -join ', ')），可能需要管理员权限或请手动关闭后重试。"
-        }
-        if (-not (Wait-FileUnlocked -FilePath $AsarPath -TimeoutMs 5000)) {
-            Die "app.asar 文件句柄尚未释放，请稍后或手动关闭相关进程后重试。"
-        }
-        Ok "已关闭 Antigravity"
-    } else {
-        Die "请手动关闭 Antigravity 后重新运行本脚本。"
     }
 }
 
@@ -679,11 +693,7 @@ try {
         throw "临时文件完整性校验失败：$($verifyTmp.Stderr)"
     }
     $asarTouched = $true
-    try {
-        [System.IO.File]::Replace($TmpPath, $AsarPath, $null, $true)
-    } catch {
-        Move-Item -LiteralPath $TmpPath -Destination $AsarPath -Force
-    }
+    Replace-AsarFile -SourceTmp $TmpPath -TargetAsar $AsarPath
     $deltaBytes = $injectRes.Stdout -replace '^INJECT_OK:', ''
     Ok "app.asar 补丁完成（净增 $deltaBytes 字节，钩子版本 $HookVersion）"
 } catch {
