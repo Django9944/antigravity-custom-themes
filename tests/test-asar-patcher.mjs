@@ -292,6 +292,18 @@ try {
         }
 
         assert.ok(baseCss.includes('backdrop-filter: blur('), 'BASE_CSS must retain macOS backdrop-filter blur rules');
+        assert.ok(
+            baseCss.includes('.agy-inset-shell [style*="--sidebar"]') && darkCss.includes('.agy-inset-shell [style*="--sidebar"]'),
+            'BASE_CSS and DARK_DELTA_CSS must override inline --sidebar/--color-sidebar inside .agy-inset-shell'
+        );
+        assert.ok(
+            baseCss.includes('[data-ag-scrolled="true"]') && darkCss.includes('[data-ag-scrolled="true"]'),
+            'Sticky sidebar headers should only paint solid backdrop when scrolled'
+        );
+        assert.ok(
+            js.includes('syncSidebarScrollState'),
+            'current.js must track sidebar scroll state via syncSidebarScrollState'
+        );
 
         for (const [label, cssText] of [['WIN_PERF_CSS', winLightCss], ['WIN_PERF_DARK_CSS', winDarkCss]]) {
             for (const block of cssText.split('}')) {
