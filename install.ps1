@@ -330,6 +330,8 @@ $ResDir     = $locations[0]
 $AsarPath   = Join-Path $ResDir 'app.asar'
 $BackupPath = Join-Path $ResDir 'app.asar.stock-backup'
 $UserDataDir = if ($env:AG_USER_DATA_DIR) { $env:AG_USER_DATA_DIR } else { Join-Path $env:APPDATA 'Antigravity' }
+$AutoHealVbsPath = Join-Path $UserDataDir 'custom-theme-autoheal.vbs'
+$AutoHealLogPath = Join-Path $UserDataDir 'custom-theme-autoheal.log'
 $ThemeDirs  = @(
     (Join-Path $ResDir 'custom-theme'),
     (Join-Path $UserDataDir 'custom-theme')
@@ -341,6 +343,9 @@ $Runtime = Select-AsarRuntime -ResourcesDir $ResDir
 # ---------- 停用宿主升级自动恢复 (-DisableAutoHeal) ----------
 if ($DisableAutoHeal) {
     $del = Invoke-ProcessCaptured -FilePath 'schtasks.exe' -Arguments @('/Delete', '/TN', $AutoHealTaskName, '/F')
+    if (Test-Path -LiteralPath $AutoHealVbsPath) {
+        Remove-Item -LiteralPath $AutoHealVbsPath -Force -ErrorAction SilentlyContinue
+    }
     if ($del.ExitCode -eq 0) {
         Ok "已停用并删除计划任务 ($AutoHealTaskName)"
     } else {
@@ -366,13 +371,39 @@ if ($Doctor) {
 # ---------- 启用宿主升级自动恢复 (-EnableAutoHeal) ----------
 if ($EnableAutoHeal) {
     $scriptPath = $MyInvocation.MyCommand.Path
-    $taskCmd = "powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$scriptPath`" -AutoHeal"
-    if ($AppPath) { $taskCmd += " -AppPath `"$AppPath`"" }
-    $crt = Invoke-ProcessCaptured -FilePath 'schtasks.exe' -Arguments @('/Create', '/F', '/SC', 'ONLOGON', '/TN', $AutoHealTaskName, '/TR', $taskCmd)
-    if ($crt.ExitCode -ne 0) {
-        Die "创建计划任务失败：$($crt.Stderr) $($crt.Stdout)"
+    $psCmd = "powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$scriptPath`" -AutoHeal"
+    if ($AppPath) { $psCmd += " -AppPath `"$AppPath`"" }
+
+    $vbsDir = Split-Path -Parent $AutoHealVbsPath
+    if (-not (Test-Path -LiteralPath $vbsDir)) {
+        New-Item -ItemType Directory -Path $vbsDir -Force | Out-Null
     }
-    Ok "已启用宿主升级自动恢复计划任务 ($AutoHealTaskName，用户登录时自动检测)"
+    $vbsEscapedCmd = $psCmd.Replace('"', '""')
+    $vbsContent = "CreateObject(""WScript.Shell"").Run ""$vbsEscapedCmd"", 0, False`r`n"
+    Set-Content -LiteralPath $AutoHealVbsPath -Value $vbsContent -Encoding ASCII
+
+    $registeredRich = $false
+    try {
+        $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+        $triggerLogon = New-ScheduledTaskTrigger -AtLogOn -User $currentUser
+        $triggerPeriodic = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 30)
+        $action = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument "//B //Nologo `"$AutoHealVbsPath`""
+        $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -Hidden -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 2)
+        $null = Register-ScheduledTask -TaskName $AutoHealTaskName -Action $action -Trigger @($triggerLogon, $triggerPeriodic) -Settings $settings -Force -ErrorAction Stop
+        $registeredRich = $true
+    } catch {
+        $taskCmd = "wscript.exe //B //Nologo `"$AutoHealVbsPath`""
+        $crt = Invoke-ProcessCaptured -FilePath 'schtasks.exe' -Arguments @('/Create', '/F', '/SC', 'ONLOGON', '/TN', $AutoHealTaskName, '/TR', $taskCmd)
+        if ($crt.ExitCode -ne 0) {
+            Die "创建计划任务失败：$($crt.Stderr) $($crt.Stdout)"
+        }
+    }
+
+    if ($registeredRich) {
+        Ok "已启用宿主升级自动恢复计划任务 ($AutoHealTaskName：用户登录 + 每 30 分钟无弹窗静默巡检)"
+    } else {
+        Ok "已启用宿主升级自动恢复计划任务 ($AutoHealTaskName，用户登录时无弹窗静默检测)"
+    }
     Write-Host "    停用命令：powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1 -DisableAutoHeal" -ForegroundColor Gray
     exit 0
 }
@@ -380,17 +411,42 @@ if ($EnableAutoHeal) {
 # ---------- 静默自愈模式 (-AutoHeal) ----------
 if ($AutoHeal) {
     $NonInteractive = $true
+    function Write-AutoHealLog([string]$Line) {
+        try {
+            $logDir = Split-Path -Parent $AutoHealLogPath
+            if (-not (Test-Path -LiteralPath $logDir)) { New-Item -ItemType Directory -Path $logDir -Force | Out-Null }
+            $stamp = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
+            Add-Content -LiteralPath $AutoHealLogPath -Value "[$stamp] $Line" -Encoding UTF8 -ErrorAction SilentlyContinue
+        } catch { }
+    }
+
     $ahCheck = Invoke-AsarEngine -Runtime $Runtime -Action 'inspect' -TargetAsar $AsarPath
     if ($ahCheck.ExitCode -eq 0 -and $ahCheck.Stdout -eq 'PATCHED_V1') {
+        $restoredAny = $false
+        foreach ($d in $ThemeDirs) {
+            foreach ($f in $Payloads) {
+                $dst = Join-Path $d $f
+                $src = Join-Path $ScriptDir $f
+                if ((-not (Test-Path -LiteralPath $dst)) -and (Test-Path -LiteralPath $src)) {
+                    if (-not (Test-Path -LiteralPath $d)) { New-Item -ItemType Directory -Path $d -Force | Out-Null }
+                    Copy-Item -LiteralPath $src -Destination $dst -Force
+                    $restoredAny = $true
+                }
+            }
+        }
+        if ($restoredAny) { Write-AutoHealLog "Restored missing custom-theme payload files while app.asar is PATCHED_V1." }
         exit 0
     }
     if ($ahCheck.ExitCode -eq 2) {
+        Write-AutoHealLog "ANCHOR_MISSING: Antigravity anchor changed; skipped auto-heal. Run install.ps1 -Update."
         Warn "检测到 Antigravity 已升级且注入锚点发生变化，已安全跳过自动恢复。请运行 install.ps1 -Update 更新主题包。"
         exit 2
     }
     if ($ahCheck.ExitCode -ne 0) {
+        Write-AutoHealLog "ERROR inspecting app.asar: $($ahCheck.Stderr)"
         Die "自愈检测异常：$($ahCheck.Stderr)"
     }
+    Write-AutoHealLog "Detected unpatched app.asar ($($ahCheck.Stdout)); applying silent in-place recovery..."
     Info "检测到宿主升级覆盖了 app.asar ($($ahCheck.Stdout))，正在静默恢复主题注入..."
 }
 
@@ -705,6 +761,9 @@ try {
             Write-Host "[X] 自动回滚失败，请手动用 app.asar.stock-backup 覆盖 app.asar。" -ForegroundColor Red
         }
     }
+    if ($AutoHeal) {
+        Write-AutoHealLog "FAILED writing/verifying app.asar: $($_.Exception.Message)"
+    }
     Die "写入或校验 app.asar 失败：$($_.Exception.Message)"
 } finally {
     if (Test-Path -LiteralPath $TmpPath) {
@@ -718,7 +777,13 @@ if ($finalVerify.ExitCode -ne 0) {
     if (Test-Path -LiteralPath $BackupPath) {
         Copy-Item -LiteralPath $BackupPath -Destination $AsarPath -Force -ErrorAction SilentlyContinue
     }
+    if ($AutoHeal) {
+        Write-AutoHealLog "FAILED final verify-patched: $($finalVerify.Stderr)"
+    }
     Die "自检失败：$($finalVerify.Stderr)（已尝试回滚，可运行 uninstall.bat 后重试）"
+}
+if ($AutoHeal) {
+    Write-AutoHealLog "Auto-heal completed successfully (delta=$deltaBytes bytes, hook=$HookVersion)."
 }
 Ok "自检通过：钩子已注入且整包与分块 integrity 一致"
 

@@ -517,10 +517,12 @@ try {
             const healedHash = sha256(fs.readFileSync(fakeAsar));
             assert.notEqual(healedHash, sha256(stockBuf), 'AutoHeal should re-inject CLEAN app.asar');
 
-            // AutoHeal on PATCHED_V1 -> no-op, bytes unchanged
+            // AutoHeal on PATCHED_V1 -> no-op on ASAR bytes, and restores missing payload files
+            fs.rmSync(path.join(fakeRes, 'custom-theme'), { recursive: true, force: true });
             r = spawnSync(psExe, [...psBase, '-AutoHeal'], { encoding: 'utf8', env: winEnv });
             assert.equal(r.status, 0, `install.ps1 -AutoHeal (PATCHED_V1) failed:\n${r.stdout}\n${r.stderr}`);
             assert.equal(sha256(fs.readFileSync(fakeAsar)), healedHash, 'AutoHeal must be a no-op when already PATCHED_V1');
+            assert.ok(fs.existsSync(path.join(fakeRes, 'custom-theme', 'current.js')), 'AutoHeal should restore missing custom-theme payload files');
 
             // AutoHeal on ANCHOR_MISSING -> exits 2 without modifying ASAR
             const badBuf = createSyntheticAsar('function noAnchor() {}\n');

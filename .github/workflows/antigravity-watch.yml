@@ -2,8 +2,8 @@ name: Antigravity Host Watch
 
 on:
   schedule:
-    # Run daily at 02:00 UTC (10:00 UTC+8)
-    - cron: '0 2 * * *'
+    # Check official Antigravity releases every 4 hours (UTC)
+    - cron: '0 */4 * * *'
   workflow_dispatch:
     inputs:
       force_verify_asar:
